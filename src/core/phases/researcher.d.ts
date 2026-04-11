@@ -12,6 +12,18 @@ export interface SectionAnalysis {
     implications: string[];
     gaps: string[];
 }
+export interface ConfidenceDetails {
+    score: number;
+    level: 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+    sourcesCount: number;
+    factsCount: number;
+    sourceTypes: string[];
+    contradictions: number;
+    gaps: number;
+    reason: string;
+    hasCustomerVoice: boolean;
+    hasExpertVoice: boolean;
+}
 export interface SectionFindings {
     sectionId: string;
     sectionTitle: string;
@@ -20,6 +32,7 @@ export interface SectionFindings {
     statistics: Record<string, string>;
     sources: string[];
     confidence: number;
+    confidenceDetails?: ConfidenceDetails;
     researched: boolean;
     analysis?: SectionAnalysis;
 }

@@ -80,10 +80,10 @@ describe('DeepResearchOrchestrator Integration', () => {
     });
 
     it('should have proper typing for ResearchTask', () => {
-      const mockTask: ResearchTask = {
+      const mockTask: Partial<ResearchTask> = {
         id: 'task-1',
         question: 'What is X?',
-        createdAt: new Date(),
+        createdAt: Date.now(),
         status: 'pending'
       };
 

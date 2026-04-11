@@ -32,6 +32,19 @@ export interface SectionAnalysis {
   gaps: string[];
 }
 
+export interface ConfidenceDetails {
+  score: number;                 // 0-1 raw score
+  level: 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+  sourcesCount: number;
+  factsCount: number;
+  sourceTypes: string[];         // ['community', 'academic', 'industry', 'code']
+  contradictions: number;
+  gaps: number;
+  reason: string;                // Human-readable explanation
+  hasCustomerVoice: boolean;     // Actual quotes from real customers?
+  hasExpertVoice: boolean;       // Expert/authority opinions?
+}
+
 export interface SectionFindings {
   sectionId: string;
   sectionTitle: string;
@@ -40,6 +53,7 @@ export interface SectionFindings {
   statistics: Record<string, string>;
   sources: string[];
   confidence: number;
+  confidenceDetails?: ConfidenceDetails;
   researched: boolean;
   analysis?: SectionAnalysis;
 }
@@ -122,33 +136,92 @@ function categorizeSource(url: string): string {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Score confidence of findings on a 0-1 scale.
+ * Score confidence of findings and return a detailed breakdown.
  * Stricter scoring: requires high bar across all dimensions.
+ * Backward-compatible: callers that only need the number use `.score`.
  */
-function scoreConfidence(findings: SectionFindings): number {
+function scoreConfidence(findings: SectionFindings): ConfidenceDetails {
+  const sourcesCount = findings.sources.length;
+  const factsCount   = findings.facts.length;
+
   // Source volume — STRICT: 30 sources for 0.5, 75+ for 1.0
-  const sourcesScore = Math.min(findings.sources.length / 75, 1);
+  const sourcesScore = Math.min(sourcesCount / 75, 1);
 
   // Fact density — STRICT: 100+ facts needed for high confidence
-  const factsScore = Math.min(findings.facts.length / 100, 1);
+  const factsScore = Math.min(factsCount / 100, 1);
 
-  // Source diversity (unique domains) — must have 5+ types
-  const sourceTypes = new Set(findings.sources.map(s => categorizeSource(s)));
-  const diversityScore = Math.min(sourceTypes.size / 5, 1);
+  // Source diversity (unique types) — must have 5+ types for full score
+  const sourceTypeSet = new Set(findings.sources.map(s => categorizeSource(s)));
+  const sourceTypes   = Array.from(sourceTypeSet);
+  const diversityScore = Math.min(sourceTypes.length / 5, 1);
 
-  // Contradiction detection penalty
-  const contradictionCount = (findings.analysis?.contradictions || []).length;
-  const contradictionPenalty = Math.min(contradictionCount * 0.1, 0.5);
+  // Contradiction / gap penalties
+  const contradictions     = (findings.analysis?.contradictions || []).length;
+  const gaps               = (findings.analysis?.gaps || []).length;
+  const contradictionPenalty = Math.min(contradictions * 0.1, 0.5);
+  const gapPenalty           = Math.min(gaps * 0.05, 0.4);
 
-  // Gap count penalty
-  const gapCount = (findings.analysis?.gaps || []).length;
-  const gapPenalty = Math.min(gapCount * 0.05, 0.4);
+  // Weighted composition
+  const baseScore  = sourcesScore * 0.35 + factsScore * 0.4 + diversityScore * 0.25;
+  const finalScore = Math.min(Math.max(baseScore - contradictionPenalty - gapPenalty, 0), 1.0);
 
-  // Weighted composition: emphasize fact density and source diversity
-  const baseScore = sourcesScore * 0.35 + factsScore * 0.4 + diversityScore * 0.25;
-  const finalScore = Math.max(baseScore - contradictionPenalty - gapPenalty, 0);
+  // Confidence level bucket
+  let level: ConfidenceDetails['level'];
+  if      (finalScore >= 0.8) level = 'very_high';
+  else if (finalScore >= 0.6) level = 'high';
+  else if (finalScore >= 0.4) level = 'medium';
+  else if (finalScore >= 0.2) level = 'low';
+  else                        level = 'very_low';
 
-  return Math.min(finalScore, 1.0);
+  // Voice detection (look at quotes array and facts for signals)
+  const allText = [...findings.facts, ...findings.quotes].join(' ').toLowerCase();
+  const hasCustomerVoice = findings.quotes.length > 0
+    || /\b(customer|buyer|user|reviewer|bought|purchased)\b/.test(allText);
+  const hasExpertVoice   = sourceTypes.includes('academic')
+    || /\b(expert|study|research|doctor|professor|published|journal)\b/.test(allText);
+
+  // Build human-readable reason
+  const problems: string[] = [];
+  const strengths: string[] = [];
+
+  if (sourcesCount < 10)   problems.push(`only ${sourcesCount} sources`);
+  else if (sourcesCount >= 50) strengths.push(`${sourcesCount} sources`);
+  else                         strengths.push(`${sourcesCount} sources`);
+
+  if (!hasCustomerVoice)   problems.push('no customer quotes found');
+  else                     strengths.push('strong customer voice');
+
+  if (!hasExpertVoice && level !== 'very_high') problems.push('missing academic/expert sources');
+  else if (hasExpertVoice) strengths.push('expert sources present');
+
+  if (sourceTypes.length < 2) problems.push('low source diversity');
+  else if (sourceTypes.length >= 4) strengths.push('diverse source types');
+
+  if (contradictions > 0)  problems.push(`${contradictions} contradiction${contradictions > 1 ? 's' : ''} need resolution`);
+  if (gaps > 2)            problems.push(`${gaps} research gaps remain`);
+
+  let reason: string;
+  if (level === 'very_low' || level === 'low') {
+    reason = `Weak: ${problems.join(', ') || 'insufficient data'}`;
+  } else if (level === 'medium') {
+    const detail = [...strengths, ...problems].join(', ');
+    reason = `Medium: ${detail}`;
+  } else {
+    reason = `${level === 'very_high' ? 'Very high' : 'High'}: ${strengths.join(', ')}${problems.length > 0 ? `, but ${problems.join(', ')}` : ''}`;
+  }
+
+  return {
+    score: finalScore,
+    level,
+    sourcesCount,
+    factsCount,
+    sourceTypes,
+    contradictions,
+    gaps,
+    reason,
+    hasCustomerVoice,
+    hasExpertVoice
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -282,8 +355,10 @@ export async function researchSection(
     log.info(`Queue status: ${status.queued} queued, ${status.processing} processing`);
   }
 
-  // Score confidence
-  findings.confidence = scoreConfidence(findings);
+  // Score confidence — store full details and backward-compat numeric field
+  const confidenceDetails = scoreConfidence(findings);
+  findings.confidenceDetails = confidenceDetails;
+  findings.confidence = confidenceDetails.score;
 
   // Reasoning layer
   if (findings.facts.length >= 5) {
