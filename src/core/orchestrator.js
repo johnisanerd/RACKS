@@ -15,7 +15,7 @@ import { context1Service } from '../services/context1Service.js';
 import { SubagentPool } from '../subagents/pool.js';
 import { createLogger } from '../utils/logger.js';
 import { liveDisplay } from '../utils/liveDisplay.js';
-import { youtubeTranscriptService } from '../services/youtubeTranscriptService.js';
+import { youtubeVideoQueue } from '../services/youtubeTranscriptService.js';
 import { storageService } from '../services/storageService.js';
 import { validateQueriesBatch } from '../utils/searchQueryValidator.js';
 import pLimit from 'p-limit';
@@ -206,6 +206,7 @@ Make each section specific and research-friendly (not too broad).`;
         const sourceSet = new Set();
         const findings = {
             sectionId: section.id,
+            sectionTitle: section.title,
             facts: [],
             quotes: [],
             statistics: {},
@@ -223,37 +224,16 @@ Make each section specific and research-friendly (not too broad).`;
         }
         findings.sources = Array.from(sourceSet);
         // -- YouTube transcript enrichment --
-        // Scan all collected sources for YouTube URLs, fetch transcripts
-        // in parallel (max 3 concurrent) and add summaries as extra facts.
+        // Scan all collected sources for YouTube URLs, queue transcripts for background processing
+        // Queue prevents blocking research while videos process. Max 3 concurrent downloads.
         const ytUrls = findings.sources.filter(url => /youtube\.com\/watch|youtu\.be\//.test(url));
         if (ytUrls.length > 0) {
-            log.info(`Found ${ytUrls.length} YouTube URL(s) in section "${section.title}" -- fetching transcripts`);
-            const transcriptFacts = await Promise.all(ytUrls.map((url, idx) => ytLimit(async () => {
-                const ytAgentId = `YouTube-${idx + 1}`;
-                const videoId = url.match(/[?&v=]([a-zA-Z0-9_-]{11})/)?.[1] ?? url;
-                liveDisplay.setAgentStatus(ytAgentId, `Transcribing: ${videoId} — fetching segments...`);
-                try {
-                    const transcript = await youtubeTranscriptService.fetchTranscript(url);
-                    if (!transcript) {
-                        liveDisplay.clearAgent(ytAgentId);
-                        return null;
-                    }
-                    const totalSeg = transcript.segments.length;
-                    liveDisplay.setAgentStatus(ytAgentId, `Transcribing: ${videoId} — analyzing ${totalSeg} segments`);
-                    const summary = await youtubeTranscriptService.summarizeTranscript(transcript);
-                    const factLine = `[YouTube ${summary.videoId}] ${summary.summary} Key points: ${summary.keyPoints.slice(0, 3).join(' | ')}`;
-                    log.info(`Transcript summary added for ${url}`);
-                    liveDisplay.clearAgent(ytAgentId);
-                    return factLine;
-                }
-                catch (err) {
-                    log.warn(`Failed to process YouTube transcript for ${url}:`, err);
-                    liveDisplay.clearAgent(ytAgentId);
-                    return null;
-                }
-            })));
-            const validFacts = transcriptFacts.filter((f) => f !== null);
-            findings.facts.push(...validFacts);
+            log.info(`Found ${ytUrls.length} YouTube URL(s) in section "${section.title}" -- queueing for background processing`);
+            for (const url of ytUrls) {
+                youtubeVideoQueue.enqueue(url, section.title); // Queue instead of awaiting
+            }
+            const status = youtubeVideoQueue.getQueueStatus();
+            log.info(`Queue status: ${status.queued} queued, ${status.processing} processing`);
         }
         // Score confidence based on specificity and corroboration
         findings.confidence = this.scoreConfidence(findings);

@@ -7,7 +7,7 @@
  * Helps prevent overly broad research and ensures focused results.
  */
 
-import { ollamaService } from './ollama.js';
+import { ollamaService } from '../services/ollama.js';
 import { createLogger } from './logger.js';
 
 const log = createLogger('preResearchQuestioner');

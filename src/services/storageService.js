@@ -8,7 +8,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 const log = createLogger('storageService');
 const OUTPUT_DIR = path.join(os.homedir(), 'research-output');
 // ─────────────────────────────────────────────────────────────

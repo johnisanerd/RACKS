@@ -6,8 +6,8 @@
  * comprehensive report on that specific source.
  */
 
-import { wayfarerService } from './wayfarer.js';
-import { ollamaService } from './ollama.js';
+import { wayfarerService } from '../services/wayfarer.js';
+import { ollamaService } from '../services/ollama.js';
 import { createLogger } from './logger.js';
 
 const log = createLogger('deepDiveAnalyzer');

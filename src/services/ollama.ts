@@ -87,6 +87,10 @@ export class OllamaService {
         return this._generate(prompt, model, options, attempt + 1);
       }
 
+      if (!result) {
+        throw new OllamaError(`Empty response from ${model} after ${maxAttempts} attempts`, true);
+      }
+
       return result;
     } catch (error) {
       if (attempt < maxAttempts) {

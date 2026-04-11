@@ -9,7 +9,7 @@
  *   POST /analyze-page  — page analysis with optional vision
  */
 
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('wayfarer');
 
@@ -25,6 +25,12 @@ export interface FetchedContent {
   title: string;
   content: string;
   metadata: Record<string, any>;
+}
+
+export interface WayfarerErrorResponse {
+  error: true;
+  message: string;
+  data: [];
 }
 
 export interface ExtractedImage {
@@ -91,7 +97,8 @@ export class WayfarerService {
           }
         }));
     } catch (error) {
-      log.error('Research failed', { error });
+      const message = error instanceof Error ? error.message : 'unknown';
+      log.error('Research failed', { error: message });
       return [];
     }
   }

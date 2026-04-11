@@ -2,7 +2,7 @@
  * Command: racks resume
  *
  * Resume a paused or crashed research session from checkpoint.
- * Usage: racks resume --task-id "task-abc123"
+ * Usage: racks resume --task-id "task-abc123" [--time "30m"]
  */
 /**
  * Execute resume command

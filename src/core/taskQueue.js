@@ -287,5 +287,24 @@ export class DeepResearchTaskQueue extends EventEmitter {
         this.db.close();
     }
 }
-export const createTaskQueue = (dbPath) => new DeepResearchTaskQueue(dbPath);
+export const createTaskQueue = (dbPath) => {
+    const queue = new DeepResearchTaskQueue(dbPath);
+    // Register process termination handlers
+    process.on('SIGTERM', () => {
+        console.log('SIGTERM received, closing database connection');
+        queue.close();
+        process.exit(0);
+    });
+    process.on('SIGINT', () => {
+        console.log('SIGINT received, closing database connection');
+        queue.close();
+        process.exit(0);
+    });
+    process.on('uncaughtException', (error) => {
+        console.error('Uncaught exception:', error);
+        queue.close();
+        process.exit(1);
+    });
+    return queue;
+};
 //# sourceMappingURL=taskQueue.js.map

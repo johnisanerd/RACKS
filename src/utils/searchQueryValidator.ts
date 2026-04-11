@@ -6,7 +6,7 @@
  * not casting nets too wide.
  */
 
-import { wayfarerService } from './wayfarer.js';
+import { wayfarerService } from '../services/wayfarer.js';
 import { createLogger } from './logger.js';
 
 const log = createLogger('searchQueryValidator');

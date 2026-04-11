@@ -14,7 +14,7 @@
 
 import { ollamaService } from './ollama.js';
 import { storageService } from './storageService.js';
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { readFile, unlink, mkdtemp } from 'fs/promises';
@@ -105,7 +105,16 @@ export class YouTubeTranscriptService {
       const pyResult = await this._fetchViaPython(videoId);
       if (pyResult) {
         log.info(`Transcript OK via youtube-transcript-api: ${pyResult.segments.length} segments`);
-        if (taskId) { try { await storageService.saveTranscript(taskId, pyResult); } catch {} }
+        if (taskId) {
+          try {
+            await storageService.saveTranscript(taskId, pyResult);
+          } catch (err) {
+            log.error(`Failed to save transcript for ${videoId}:`, err);
+            // Add to retry queue if system supports it
+            // For now, log the error and continue returning the transcript
+            // The caller shouldn't lose the data just because storage failed
+          }
+        }
         return pyResult;
       }
 
@@ -114,7 +123,16 @@ export class YouTubeTranscriptService {
       const ytdlpResult = await this._fetchViaYtDlp(videoId);
       if (ytdlpResult) {
         log.info(`Transcript OK via yt-dlp: ${ytdlpResult.segments.length} segments`);
-        if (taskId) { try { await storageService.saveTranscript(taskId, ytdlpResult); } catch {} }
+        if (taskId) {
+          try {
+            await storageService.saveTranscript(taskId, ytdlpResult);
+          } catch (err) {
+            log.error(`Failed to save transcript for ${videoId}:`, err);
+            // Add to retry queue if system supports it
+            // For now, log the error and continue returning the transcript
+            // The caller shouldn't lose the data just because storage failed
+          }
+        }
         return ytdlpResult;
       }
 
@@ -123,7 +141,16 @@ export class YouTubeTranscriptService {
       const innertubeResult = await this._fetchViaInnertube(videoId);
       if (innertubeResult) {
         log.info(`Transcript OK via Innertube: ${innertubeResult.segments.length} segments`);
-        if (taskId) { try { await storageService.saveTranscript(taskId, innertubeResult); } catch {} }
+        if (taskId) {
+          try {
+            await storageService.saveTranscript(taskId, innertubeResult);
+          } catch (err) {
+            log.error(`Failed to save transcript for ${videoId}:`, err);
+            // Add to retry queue if system supports it
+            // For now, log the error and continue returning the transcript
+            // The caller shouldn't lose the data just because storage failed
+          }
+        }
         return innertubeResult;
       }
 
@@ -132,7 +159,16 @@ export class YouTubeTranscriptService {
       const apifyResult = await this._fetchViaApify(videoUrl);
       if (apifyResult) {
         log.info(`Transcript OK via Apify: ${apifyResult.segments.length} segments`);
-        if (taskId) { try { await storageService.saveTranscript(taskId, apifyResult); } catch {} }
+        if (taskId) {
+          try {
+            await storageService.saveTranscript(taskId, apifyResult);
+          } catch (err) {
+            log.error(`Failed to save transcript for ${videoId}:`, err);
+            // Add to retry queue if system supports it
+            // For now, log the error and continue returning the transcript
+            // The caller shouldn't lose the data just because storage failed
+          }
+        }
         return apifyResult;
       }
 
@@ -555,16 +591,21 @@ except Exception as e:
         const chunks: string[] = [];
         for (let i = 0; i < rawText.length; i += 3_000) chunks.push(rawText.slice(i, i + 3_000));
 
-        const partials = await Promise.all(
-          chunks.slice(0, 8).map(chunk =>
-            ollamaService.generateStream(
-              `Summarize this transcript segment in 2-3 sentences, extracting key facts:\n\n${chunk}`,
-              'gemma4:e2b',
-              { temperature: 0.2, num_ctx: 4096, num_predict: 200 }
+        try {
+          const partials = await Promise.all(
+            chunks.slice(0, 8).map(chunk =>
+              ollamaService.generateStream(
+                `Summarize this transcript segment in 2-3 sentences, extracting key facts:\n\n${chunk}`,
+                'gemma4:e2b',
+                { temperature: 0.2, num_ctx: 4096, num_predict: 200 }
+              )
             )
-          )
-        );
-        textToSummarize = partials.join('\n\n');
+          );
+          textToSummarize = partials.join('\n\n');
+        } catch (err) {
+          log.warn(`Chunk summarization failed, using original text: ${err?.message}`);
+          textToSummarize = rawText; // fallback to original
+        }
       }
 
       const prompt = `Analyze this YouTube video transcript and extract structured research value.
@@ -641,4 +682,57 @@ Return JSON only — no markdown, no explanation:
   }
 }
 
+/**
+ * Video Queue Manager — Batch process YouTube videos
+ * Prevents rate limiting, handles parallel processing with concurrency limits
+ */
+export class YouTubeVideoQueue {
+  private queue: Array<{url: string, taskId?: string}> = [];
+  private processing = false;
+  private maxConcurrent = 3;
+  private activeCount = 0;
+
+  enqueue(url: string, taskId?: string): void {
+    this.queue.push({url, taskId});
+    this.processQueue();
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processing) return;
+    this.processing = true;
+
+    while (this.queue.length > 0 && this.activeCount < this.maxConcurrent) {
+      const item = this.queue.shift();
+      if (!item) break;
+
+      this.activeCount++;
+      youtubeTranscriptService.fetchTranscript(item.url, item.taskId)
+        .then(transcript => {
+          if (transcript) {
+            log.info(`✓ Queued transcript fetched: ${item.url}`);
+          }
+        })
+        .catch(err => {
+          log.error(`✗ Queued transcript failed: ${item.url}`, err);
+        })
+        .finally(() => {
+          this.activeCount--;
+          if (this.queue.length > 0) {
+            this.processQueue();
+          } else if (this.activeCount === 0) {
+            this.processing = false;
+          }
+        });
+    }
+  }
+
+  getQueueStatus(): {queued: number, processing: number} {
+    return {
+      queued: this.queue.length,
+      processing: this.activeCount
+    };
+  }
+}
+
 export const youtubeTranscriptService = new YouTubeTranscriptService();
+export const youtubeVideoQueue = new YouTubeVideoQueue();

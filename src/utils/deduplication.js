@@ -88,6 +88,8 @@ export function deduplicateFactsInSection(facts, similarityThreshold = 0.85) {
 /**
  * Deduplicate facts across multiple sections
  * Keeps facts from earlier sections, deduplicates against them
+ * Uses SHA256 hashing for fast deduplication. For semantic deduplication,
+ * use Context-1 embeddings service (future enhancement).
  */
 export function deduplicateFactsAcrossSections(sectionFacts, similarityThreshold = 0.85) {
     const result = new Map();
@@ -96,21 +98,13 @@ export function deduplicateFactsAcrossSections(sectionFacts, similarityThreshold
         const unique = [];
         for (const fact of facts) {
             const hash = hashFact(fact);
-            // Skip if we've seen this exact fact before
+            // Skip if we've seen this exact fact before (hash-based fast path)
             if (globalSeen.has(hash)) {
                 continue;
             }
-            // Check similarity against all previously kept facts
-            let isDuplicate = false;
-            for (const keptHash of globalSeen) {
-                // Would need to store the actual fact to check similarity
-                // For now, exact hash matching is sufficient
-                if (hash === keptHash) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
+            // For full semantic deduplication, Context-1 embeddings would be used here
+            // Current implementation uses exact hash matching for performance
+            if (!globalSeen.has(hash)) {
                 globalSeen.add(hash);
                 unique.push(fact);
             }

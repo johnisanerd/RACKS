@@ -73,5 +73,22 @@ export declare class YouTubeTranscriptService {
     }[];
     private formatTimestamp;
 }
+/**
+ * Video Queue Manager — Batch process YouTube videos
+ * Prevents rate limiting, handles parallel processing with concurrency limits
+ */
+export declare class YouTubeVideoQueue {
+    private queue;
+    private processing;
+    private maxConcurrent;
+    private activeCount;
+    enqueue(url: string, taskId?: string): void;
+    private processQueue;
+    getQueueStatus(): {
+        queued: number;
+        processing: number;
+    };
+}
 export declare const youtubeTranscriptService: YouTubeTranscriptService;
+export declare const youtubeVideoQueue: YouTubeVideoQueue;
 //# sourceMappingURL=youtubeTranscriptService.d.ts.map

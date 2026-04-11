@@ -107,14 +107,14 @@ export function validateResearchDepth(depth: string): 'sq' | 'qk' | 'nr' | 'ex' 
   const valid = ['sq', 'qk', 'nr', 'ex', 'mx'] as const;
   const normalized = depth?.toLowerCase();
 
-  if (!normalized || !valid.includes(normalized)) {
+  if (!normalized || !valid.includes(normalized as any)) {
     throw new ValidationError(
       `Research depth must be one of: ${valid.join(', ')}`,
       'depth'
     );
   }
 
-  return normalized;
+  return normalized as 'sq' | 'qk' | 'nr' | 'ex' | 'mx';
 }
 
 /**

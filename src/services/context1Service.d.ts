@@ -35,8 +35,13 @@ export declare class Context1Service {
     /** Buffer of items waiting for embeddings to be computed */
     private embedQueue;
     private embedFlushTimer;
+    /** Atomic flag to prevent concurrent flushes */
+    private embedFlushScheduled;
     private maxTokenBudget;
+    private readonly MAX_CACHE_SIZE;
     private fingerprint;
+    /** Evict oldest entries if cache exceeds MAX_CACHE_SIZE */
+    private evictIfNeeded;
     /**
      * Index content. Uses fingerprint fast-dedup synchronously, then
      * queues real embeddings to be flushed in batches.
@@ -61,6 +66,7 @@ export declare class Context1Service {
         bySource: Record<string, number>;
     };
     clear(): void;
+    destroy(): void;
 }
 export declare const context1Service: Context1Service;
 //# sourceMappingURL=context1Service.d.ts.map

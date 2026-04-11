@@ -20,6 +20,11 @@ export interface FetchedContent {
     content: string;
     metadata: Record<string, any>;
 }
+export interface WayfarerErrorResponse {
+    error: true;
+    message: string;
+    data: [];
+}
 export interface ExtractedImage {
     src: string;
     alt: string;

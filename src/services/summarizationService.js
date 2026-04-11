@@ -2,7 +2,7 @@
  * Multi-Stage Summarization Service
  * Efficiently summarizes thousands of sources through hierarchical compression
  */
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 const log = createLogger('summarizationService');
 export class SummarizationService {
     constructor() {

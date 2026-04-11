@@ -15,7 +15,7 @@ export class RateLimiter {
   private tokens: number;
   private lastRefill: number;
   private readonly capacity: number;
-  private readonly refillRatePerSecond: number;
+  protected refillRatePerSecond: number;
 
   constructor(capacity = 100, refillRatePerSecond = 10) {
     this.capacity = capacity;

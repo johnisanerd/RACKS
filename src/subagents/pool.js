@@ -2,10 +2,10 @@
  * Subagent Manager — Real parallel research workers
  * Each subagent: Wayfarer search → page extraction → Ollama compression → structured facts
  */
-import { createLogger } from './logger.js';
-import { liveDisplay } from './liveDisplay.js';
-import { wayfarerService } from './wayfarer.js';
-import { ollamaService } from './ollama.js';
+import { createLogger } from '../utils/logger.js';
+import { liveDisplay } from '../utils/liveDisplay.js';
+import { wayfarerService } from '../services/wayfarer.js';
+import { ollamaService } from '../services/ollama.js';
 import p from 'p-limit';
 const log = createLogger('subagentManager');
 export class SubagentPool {
@@ -43,9 +43,13 @@ export class SubagentPool {
                 const allQuotes = [];
                 // Process pages in small parallel batches (3 at a time) to stay within Ollama limits
                 const pageBatchLimit = p(3);
+                let successCount = 0;
+                let failureCount = 0;
                 await Promise.all(pages.slice(0, 8).map(page => pageBatchLimit(async () => {
-                    if (!page.content || page.content.length < 100)
+                    if (!page.content || page.content.length < 100) {
+                        failureCount++;
                         return;
+                    }
                     liveDisplay.setAgentStatus(agentId, `Extracting: ${new URL(page.url).hostname}`);
                     // Truncate to ~3000 chars for the model
                     const truncated = page.content.slice(0, 3000);
@@ -75,8 +79,11 @@ Example: ["Fact 1 here.", "Fact 2 here.", "Fact 3 here."]`;
                             allFacts.push(...facts.filter(f => typeof f === 'string' && f.length > 10));
                         }
                         allSources.push(page.url);
+                        successCount++;
                     }
-                    catch {
+                    catch (err) {
+                        failureCount++;
+                        log.warn(`Extraction failed for page ${page.title}: ${err instanceof Error ? err.message : 'unknown'}`);
                         // Fallback: use title + snippet as a basic fact
                         if (page.title && page.title !== 'Untitled') {
                             allFacts.push(`${page.title}: ${page.content.slice(0, 150)}`);
@@ -84,6 +91,7 @@ Example: ["Fact 1 here.", "Fact 2 here.", "Fact 3 here."]`;
                         }
                     }
                 })));
+                log.info(`Page extraction: ${successCount} success, ${failureCount} failures, ${allFacts.length} facts extracted`);
                 liveDisplay.setAgentStatus(agentId, `Indexing ${allFacts.length} facts from "${task.query}"`);
                 log.info(`Subagent #${id} complete: ${allFacts.length} facts from ${allSources.length} sources`);
                 liveDisplay.clearAgent(agentId);

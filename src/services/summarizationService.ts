@@ -4,7 +4,7 @@
  */
 
 import { ollamaService } from './ollama.js';
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('summarizationService');
 

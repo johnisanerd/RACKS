@@ -18,12 +18,12 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { input, confirm, select } from '@inquirer/prompts';
 import Table from 'cli-table3';
-import { DeepResearchOrchestrator } from './utils/deepResearchOrchestrator.js';
-import { liveDisplay } from './utils/liveDisplay.js';
-import { exportToHTML } from './utils/pdfExporter.js';
-import { analyzeTopicAndGenerateQuestions, formatQuestionsForDisplay } from './utils/preResearchQuestioner.js';
-import { analyzeSingleSource, formatAnalysisForDisplay } from './utils/deepDiveAnalyzer.js';
 import { resolve } from 'path';
+import { liveDisplay } from '../utils/liveDisplay.js';
+import { exportToHTML } from '../utils/pdfExporter.js';
+import { analyzeTopicAndGenerateQuestions, formatQuestionsForDisplay } from '../utils/preResearchQuestioner.js';
+import { analyzeSingleSource, formatAnalysisForDisplay } from '../utils/deepDiveAnalyzer.js';
+import { DeepResearchOrchestrator } from '../core/orchestrator.js';
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS & CONFIG
 // ─────────────────────────────────────────────────────────────

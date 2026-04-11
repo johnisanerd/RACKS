@@ -37,13 +37,17 @@ function showHelp() {
     console.log('  racks <command> [options]\n');
     console.log(chalk.yellow('COMMANDS:'));
     console.log('  ask           Broad research on a topic');
+    console.log('  ask-file      Research from a markdown document');
     console.log('  dive          Deep dive into a single source');
+    console.log('  query         Ask follow-up questions about research');
     console.log('  resume        Resume a paused research session');
     console.log('  list-tasks    Show all research tasks\n');
     console.log(chalk.yellow('EXAMPLES:'));
     console.log('  racks ask --question "trends in AI safety" --time "2h"');
+    console.log('  racks ask-file research-brief.md');
     console.log('  racks dive --url "https://github.com/anthropics/anthropic-sdk-python"');
-    console.log('  racks resume --task-id "task-abc123"');
+    console.log('  racks query task-abc123 "What are the top 3 trends?"');
+    console.log('  racks resume --task-id "task-abc123" --time "30m"');
     console.log('  racks list-tasks\n');
     console.log(chalk.gray('For help on a command: racks <command> --help\n'));
 }
@@ -72,9 +76,19 @@ async function main() {
                 await commandAsk(args.slice(1));
                 break;
             }
+            case 'ask-file': {
+                const { commandAskFile } = await import('./commands/askFile.js');
+                await commandAskFile(args.slice(1));
+                break;
+            }
             case 'dive': {
                 const { commandDive } = await import('./commands/dive.js');
                 await commandDive(args.slice(1));
+                break;
+            }
+            case 'query': {
+                const { commandQuery } = await import('./commands/query.js');
+                await commandQuery(args.slice(1));
                 break;
             }
             case 'resume': {

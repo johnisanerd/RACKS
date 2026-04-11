@@ -181,7 +181,7 @@ export async function safePromiseAll<T>(
       return [];
     }
 
-    const timeoutPromise = new Promise<T | null>((_, reject) =>
+    const timeoutPromise = new Promise<(T | null)[]>((_, reject) =>
       setTimeout(() => reject(new Error(`Promise.all timeout: ${context || 'unknown'}`)), timeoutMs)
     );
 
@@ -194,7 +194,7 @@ export async function safePromiseAll<T>(
     );
 
     return await Promise.race([
-      Promise.all(safePromises),
+      Promise.all(safePromises) as Promise<(T | null)[]>,
       timeoutPromise
     ]);
   } catch (error) {

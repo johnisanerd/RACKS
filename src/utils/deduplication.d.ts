@@ -17,6 +17,8 @@ export declare function deduplicateFactsInSection(facts: string[], similarityThr
 /**
  * Deduplicate facts across multiple sections
  * Keeps facts from earlier sections, deduplicates against them
+ * Uses SHA256 hashing for fast deduplication. For semantic deduplication,
+ * use Context-1 embeddings service (future enhancement).
  */
 export declare function deduplicateFactsAcrossSections(sectionFacts: Map<string, string[]>, similarityThreshold?: number): Map<string, string[]>;
 /**

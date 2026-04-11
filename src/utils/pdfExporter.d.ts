@@ -1,7 +1,7 @@
 /**
  * PDF Exporter — Generate research reports as PDF files
  */
-import type { SectionFindings } from './deepResearchOrchestrator.js';
+import type { SectionFindings } from '../core/orchestrator.js';
 export interface ResearchReport {
     question: string;
     generatedAt: string;

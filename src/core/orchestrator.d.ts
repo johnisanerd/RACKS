@@ -26,6 +26,7 @@ export interface SectionAnalysis {
 }
 export interface SectionFindings {
     sectionId: string;
+    sectionTitle: string;
     facts: string[];
     quotes: string[];
     statistics: Record<string, string>;

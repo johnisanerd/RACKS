@@ -9,7 +9,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 import type { VideoTranscript } from './youtubeTranscriptService.js';
 
 const log = createLogger('storageService');

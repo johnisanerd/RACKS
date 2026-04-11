@@ -4,8 +4,7 @@
 
 import { createWriteStream } from 'fs';
 import { createLogger } from './logger.js';
-import type { ResearchPlan } from './deepResearchOrchestrator.js';
-import type { SectionFindings } from './deepResearchOrchestrator.js';
+import type { ResearchPlan, SectionFindings } from '../core/orchestrator.js';
 
 const log = createLogger('pdfExporter');
 

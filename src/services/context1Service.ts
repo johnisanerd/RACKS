@@ -6,7 +6,7 @@
  * Search: cosine similarity against all indexed embeddings.
  */
 
-import { createLogger } from './logger.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('context1Service');
 
@@ -56,8 +56,9 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
     const data = await res.json() as { embeddings: number[][] };
     return data.embeddings;
   } catch (err) {
-    log.warn(`embedBatch failed, using zeros:`, err);
-    return texts.map(() => []);
+    log.warn(`embedBatch failed, returning sparse embeddings:`, err);
+    // Return sparse embeddings (zero vectors clearly marked as incomplete)
+    return texts.map(() => new Array(384).fill(0));
   }
 }
 
@@ -82,12 +83,28 @@ export class Context1Service {
   private contentHashes: Set<string> = new Set();
   /** Buffer of items waiting for embeddings to be computed */
   private embedQueue: Array<{ id: string; text: string }> = [];
-  private embedFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private embedFlushTimer: NodeJS.Timeout | null = null;
+  /** Atomic flag to prevent concurrent flushes */
+  private embedFlushScheduled = false;
 
   private maxTokenBudget = 32_000;
+  private readonly MAX_CACHE_SIZE = 1000;
 
   private fingerprint(text: string): string {
     return text.toLowerCase().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').trim().slice(0, 120);
+  }
+
+  /** Evict oldest entries if cache exceeds MAX_CACHE_SIZE */
+  private evictIfNeeded(): void {
+    if (this.vectorCache.size >= this.MAX_CACHE_SIZE) {
+      // Remove oldest entries (simple FIFO, first added = first removed)
+      const entries = Array.from(this.vectorCache.entries());
+      const toDelete = entries.slice(0, Math.floor(this.MAX_CACHE_SIZE * 0.2)); // remove 20%
+      for (const [key] of toDelete) {
+        this.vectorCache.delete(key);
+      }
+      log.info(`Vector cache evicted ${toDelete.length} entries, now at ${this.vectorCache.size} entries`);
+    }
   }
 
   // ── Indexing ────────────────────────────────────────────────
@@ -119,6 +136,7 @@ export class Context1Service {
       tokens
     };
     this.vectorCache.set(id, entry);
+    this.evictIfNeeded();
 
     // Queue embedding computation (flushed in batches)
     this.embedQueue.push({ id, text: content.slice(0, 512) }); // nomic truncates anyway
@@ -129,8 +147,14 @@ export class Context1Service {
 
   /** Flush queued items in BATCH_SIZE chunks */
   private scheduleFlush(): void {
-    if (this.embedFlushTimer) return;
-    this.embedFlushTimer = setTimeout(() => this.flushEmbedQueue(), 200);
+    if (this.embedFlushScheduled) return;
+    this.embedFlushScheduled = true;
+    this.embedFlushTimer = setTimeout(() => {
+      this.flushEmbedQueue().finally(() => {
+        this.embedFlushScheduled = false;
+        this.embedFlushTimer = null;
+      });
+    }, 200);
   }
 
   private async flushEmbedQueue(): Promise<void> {
@@ -254,6 +278,14 @@ export class Context1Service {
     this.embedQueue = [];
     if (this.embedFlushTimer) { clearTimeout(this.embedFlushTimer); this.embedFlushTimer = null; }
     log.info('Vector cache cleared');
+  }
+
+  destroy(): void {
+    if (this.embedFlushTimer) {
+      clearTimeout(this.embedFlushTimer);
+      this.embedFlushTimer = null;
+    }
+    this.clear();
   }
 }
 
