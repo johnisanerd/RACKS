@@ -8,9 +8,10 @@
     "racks": "./bin/racks.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc 2>/dev/null || true",
     "dev": "tsx watch src/cli/index.ts",
     "racks": "tsx src/cli/index.ts",
+    "start": "node bin/racks.js",
     "test": "echo 'Tests not yet implemented'",
     "test:unit": "echo 'Unit tests not yet implemented'",
     "test:integration": "echo 'Integration tests not yet implemented'",

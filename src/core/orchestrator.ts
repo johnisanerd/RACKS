@@ -11,17 +11,17 @@
  * methodically per section, reflect on what's missing.
  */
 
-import { ollamaService } from './ollama.js';
-import { context1Service } from './context1Service.js';
-import { wayfarerService } from './wayfarer.js';
-import { SubagentPool } from './subagentManager.js';
-import { createLogger } from './logger.js';
-import { liveDisplay } from './liveDisplay.js';
-import { youtubeTranscriptService } from './youtubeTranscriptService.js';
-import { storageService } from './storageService.js';
-import { validateQueriesBatch } from './searchQueryValidator.js';
+import { ollamaService } from '../services/ollama.js';
+import { context1Service } from '../services/context1Service.js';
+import { wayfarerService } from '../services/wayfarer.js';
+import { SubagentPool } from '../subagents/pool.js';
+import { createLogger } from '../utils/logger.js';
+import { liveDisplay } from '../utils/liveDisplay.js';
+import { youtubeTranscriptService } from '../services/youtubeTranscriptService.js';
+import { storageService } from '../services/storageService.js';
+import { validateQueriesBatch } from '../utils/searchQueryValidator.js';
 import pLimit from 'p-limit';
-import type { ResearchTask } from './deepResearchTaskQueue.js';
+import type { ResearchTask } from './taskQueue.js';
 import { MODEL_REGISTRY, getModel } from '../config/models.js';
 import { SERVICES } from '../config/services.js';
 
