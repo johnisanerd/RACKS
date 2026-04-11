@@ -1,12 +1,20 @@
 {
-  "name": "billy",
+  "name": "racks",
   "version": "1.0.0",
-  "description": "Billy - Enterprise Research Automation Tool",
+  "description": "RACKS - Deep Research Agent with Checkpointing and Streaming",
   "type": "module",
-  "main": "src/cli-deep-research.ts",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "racks": "./bin/racks.js"
+  },
   "scripts": {
-    "billy": "tsx src/cli-deep-research.ts",
-    "billy:dev": "tsx --watch src/cli-deep-research.ts"
+    "build": "tsc",
+    "dev": "tsx watch src/cli/index.ts",
+    "racks": "tsx src/cli/index.ts",
+    "test": "echo 'Tests not yet implemented'",
+    "test:unit": "echo 'Unit tests not yet implemented'",
+    "test:integration": "echo 'Integration tests not yet implemented'",
+    "test:e2e": "echo 'E2E tests not yet implemented'"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.1",
