@@ -230,3 +230,4 @@ Proprietary — Built with Claude
 ## Contributing
 
 This is a closed-source project. For questions or feedback, please refer to internal channels.
+# RACKS
