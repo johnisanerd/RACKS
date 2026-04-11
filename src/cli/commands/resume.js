@@ -129,10 +129,8 @@ export async function commandResume(args) {
         taskQueue.setStatus(options.taskId, 'running');
         // Create orchestrator instance and run research
         const orchestrator = new DeepResearchOrchestrator();
-        // Orchestrate the research with the loaded task
+        // Orchestrate the research with the loaded task (synthesize included)
         const state = await orchestrator.orchestrate(task);
-        // Synthesize results
-        const result = await orchestrator.synthesize(state, options.taskId);
         // Update task as completed
         taskQueue.setStatus(options.taskId, 'completed');
         console.log(chalk.green(`\n✓ Research completed!`));

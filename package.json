@@ -12,10 +12,10 @@
     "dev": "tsx watch src/cli/index.ts",
     "racks": "tsx src/cli/index.ts",
     "start": "node bin/racks.js",
-    "test": "echo 'Tests not yet implemented'",
-    "test:unit": "echo 'Unit tests not yet implemented'",
-    "test:integration": "echo 'Integration tests not yet implemented'",
-    "test:e2e": "echo 'E2E tests not yet implemented'"
+    "test": "jest",
+    "test:unit": "jest --testPathPattern='__tests__'",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.1",
