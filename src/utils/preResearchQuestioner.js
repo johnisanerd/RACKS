@@ -42,7 +42,7 @@ Return JSON with:
 }
 
 Be strict: simple = 1 variable, narrow scope. Complex = 3+ variables, deep expertise needed.`;
-        const complexityResponse = await ollamaService.generateStream(complexityPrompt, 'gemma4:e2b', { temperature: 0.5, num_predict: 256 });
+        const complexityResponse = await ollamaService.generateStream(complexityPrompt, 'gemma2b', { temperature: 0.5, num_predict: 256 });
         const complexityData = parseJson(complexityResponse);
         const numQuestions = complexityData.recommendedQuestions || 2;
         const complexity = complexityData.complexity || 'moderate';
@@ -86,7 +86,7 @@ Return as JSON:
     }
   ]
 }`;
-        const questionsResponse = await ollamaService.generateStream(questionsPrompt, 'gemma4:e2b', { temperature: 0.6, num_predict: 512 });
+        const questionsResponse = await ollamaService.generateStream(questionsPrompt, 'gemma2b', { temperature: 0.6, num_predict: 512 });
         const questionsData = parseJson(questionsResponse);
         const questions = questionsData.questions || [];
         return {

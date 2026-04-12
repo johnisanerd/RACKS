@@ -163,9 +163,13 @@ export class DeepResearchTaskQueue extends EventEmitter {
     setStatus(id, status, options) {
         const updates = ['status = ?'];
         const values = [status];
-        if (status === 'running' && !this.getTask(id)?.startedAt) {
-            updates.push('startedAt = ?');
-            values.push(Date.now());
+        // Only set startedAt if transitioning to running and it's not already set
+        if (status === 'running') {
+            const task = this.getTask(id);
+            if (task && !task.startedAt) {
+                updates.push('startedAt = ?');
+                values.push(Date.now());
+            }
         }
         if (status === 'completed' || status === 'failed' || status === 'cancelled') {
             updates.push('completedAt = ?');
@@ -289,22 +293,8 @@ export class DeepResearchTaskQueue extends EventEmitter {
 }
 export const createTaskQueue = (dbPath) => {
     const queue = new DeepResearchTaskQueue(dbPath);
-    // Register process termination handlers
-    process.on('SIGTERM', () => {
-        console.log('SIGTERM received, closing database connection');
-        queue.close();
-        process.exit(0);
-    });
-    process.on('SIGINT', () => {
-        console.log('SIGINT received, closing database connection');
-        queue.close();
-        process.exit(0);
-    });
-    process.on('uncaughtException', (error) => {
-        console.error('Uncaught exception:', error);
-        queue.close();
-        process.exit(1);
-    });
+    // Note: Event listeners should be registered by the caller (e.g., ask.ts)
+    // to avoid multiple registrations if createTaskQueue is called multiple times
     return queue;
 };
 //# sourceMappingURL=taskQueue.js.map

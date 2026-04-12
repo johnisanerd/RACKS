@@ -21,8 +21,11 @@ import { planResearch, generateSearchQueries, type ResearchPlan, type ResearchSe
 import { researchSection, type SectionFindings } from './phases/researcher.js';
 import { analyzeGaps, shouldContinueResearch, calculateCoverage, calculateConfidence } from './phases/reflector.js';
 import { synthesizeReport, type ResearchState } from './phases/synthesizer.js';
+import { generateMarketingPlan } from './marketingResearch.js';
+import { searchDuringResearch, isContext1Available } from '../services/context1ProductionHarness.js';
 
 import type { ResearchTask } from './taskQueue.js';
+import type { IntakeAnswers } from '../cli/commands/intake.js';
 
 const log = createLogger('deepResearchOrchestrator');
 
@@ -46,6 +49,10 @@ export const STANDARD_RESEARCH_CONFIG: ResearchConfig = {
   timeoutMs: 2 * 60 * 60 * 1000
 };
 
+// Plateau detection threshold: stop if ready score improves by less than 1% for 2 consecutive iterations
+export const PLATEAU_IMPROVEMENT_THRESHOLD = 0.01;
+export const PLATEAU_ITERATIONS_BEFORE_STOP = 2;
+
 // ─────────────────────────────────────────────────────────────
 // EXPORTS (for backward compatibility with CLI)
 // ─────────────────────────────────────────────────────────────
@@ -60,14 +67,40 @@ export { generateSearchQueries };
 // ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// MARKETING RESEARCH DETECTION
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Detect if a question is marketing/brand research.
+ * Routes to the 5-step marketing plan instead of generic LLM planning.
+ */
+function isMarketingResearch(question: string, intake?: IntakeAnswers): boolean {
+  // If intake provided brand URL, product name, or audience — it's marketing research
+  if (intake?.brandUrl || intake?.productName || intake?.targetAudience) return true;
+
+  // Keyword heuristics
+  const marketingKeywords = [
+    'marketing', 'brand', 'competitor', 'customer', 'audience', 'supplement',
+    'product', 'advertising', 'creative', 'ad copy', 'positioning', 'market research',
+    'desire', 'objection', 'amazon review', 'identity', 'buyer', 'purchase',
+    'sell', 'campaign', 'target market', 'demographic', 'consumer'
+  ];
+
+  const lq = question.toLowerCase();
+  return marketingKeywords.some(kw => lq.includes(kw));
+}
+
 export class DeepResearchOrchestrator {
   private config: ResearchConfig;
   private agentPool: SubagentPool;
   private startTime: number = 0;
+  private intake?: IntakeAnswers;
 
-  constructor(configOverrides?: Partial<ResearchConfig>) {
+  constructor(configOverrides?: Partial<ResearchConfig>, intake?: IntakeAnswers) {
     this.config = { ...STANDARD_RESEARCH_CONFIG, ...configOverrides };
     this.agentPool = new SubagentPool(this.config.maxParallelAgents);
+    this.intake = intake;
   }
 
   /**
@@ -107,7 +140,33 @@ export class DeepResearchOrchestrator {
     // ─────────────────────────────────────────────────────────────
 
     liveDisplay.logEvent('  Planning research structure...');
-    const plan = await planResearch(task.question, this.config.sourcesPerSection);
+
+    let plan: ResearchPlan;
+
+    if (isMarketingResearch(task.question, this.intake)) {
+      // Marketing research: use the 5-step PDF workflow
+      liveDisplay.logEvent('  Detected marketing research — using 5-step marketing workflow');
+      log.info('Using marketing research plan (brand_analysis → desire → competitor → identity → amazon)');
+
+      const { sections, researchStrategy } = generateMarketingPlan(
+        task.question,
+        this.intake?.brandUrl,
+        this.intake?.targetAudience,
+        undefined  // all 5 sections
+      );
+
+      plan = {
+        question: task.question,
+        sections,
+        researchStrategy,
+        totalEstimatedSources: sections.length * this.config.sourcesPerSection,
+      };
+
+      liveDisplay.logEvent(`  Strategy: ${researchStrategy}`);
+    } else {
+      // Generic research: LLM-generated plan
+      plan = await planResearch(task.question, this.config.sourcesPerSection);
+    }
     log.info(`Created plan with ${plan.sections.length} sections`);
 
     const state: ResearchState = {
@@ -145,22 +204,81 @@ export class DeepResearchOrchestrator {
 
       // Research all sections in parallel
       liveDisplay.updateHeader({ activeAgents: plan.sections.length });
-      const sectionResults = await Promise.all(
+
+      // Build Context-1 corpus from gathered findings (for query enrichment)
+      const c1Corpus = Array.from(state.findings.entries()).map(([sectionId, f]) => ({
+        url: f.sources[0] || `findings://${sectionId}`,
+        title: f.sectionTitle,
+        content: f.facts.slice(0, 40).map((fact, j) => `${j + 1}. ${fact}`).join('\n'),
+      })).filter(doc => doc.content.length > 0);
+
+      const c1Available = c1Corpus.length > 0 && await isContext1Available();
+
+      const sectionResults = await Promise.allSettled(
         plan.sections.map(async (section) => {
-          // Generate queries for this section
-          const existingFacts = Array.from(state.findings.values())
-            .flatMap(f => f.facts.slice(0, 2))
-            .slice(0, 10);
-          const queries = await generateSearchQueries(section, existingFacts);
+          let existingFacts: string[];
+
+          // Use Context-1 for smarter existing-facts context (only from iteration 2 on)
+          if (c1Available && i > 1) {
+            try {
+              const retrieved = await searchDuringResearch(
+                section.description,
+                c1Corpus,
+                { maxChunks: 6, maxSteps: 3 }
+              );
+              existingFacts = retrieved.chunks
+                .map(c => c.content)
+                .flatMap(text => text.split('\n').filter(l => /^\d+\./.test(l)))
+                .slice(0, 10);
+              if (existingFacts.length > 0) {
+                log.info(`C1 retrieved ${existingFacts.length} relevant existing facts for section "${section.title}"`);
+              }
+            } catch (err) {
+              log.warn(`C1 search failed for section "${section.title}", falling back to direct facts:`, err);
+              existingFacts = Array.from(state.findings.values())
+                .flatMap(f => f.facts.slice(0, 2))
+                .slice(0, 10);
+            }
+          } else {
+            // Before we have a corpus, or C1 not available — use direct facts
+            existingFacts = Array.from(state.findings.values())
+              .flatMap(f => f.facts.slice(0, 2))
+              .slice(0, 10);
+          }
+
+          let queries: string[];
+          try {
+            queries = await generateSearchQueries(section, existingFacts);
+          } catch (err) {
+            log.warn(`Failed to generate search queries for section "${section.title}":`, err);
+            queries = [section.title]; // Fallback to section title as query
+          }
 
           // Research the section
           return researchSection(section, this.agentPool, queries, task.id);
         })
       );
 
-      // Store results in state
-      sectionResults.forEach((findings, index) => {
-        state.findings.set(plan.sections[index].id, findings);
+      // Store results in state, handle settled promises
+      sectionResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          state.findings.set(plan.sections[index].id, result.value);
+        } else {
+          log.warn(`Section "${plan.sections[index].title}" research failed:`, result.reason);
+          // Keep existing findings for this section if available
+          if (!state.findings.has(plan.sections[index].id)) {
+            state.findings.set(plan.sections[index].id, {
+              sectionId: plan.sections[index].id,
+              sectionTitle: plan.sections[index].title,
+              facts: [],
+              quotes: [],
+              statistics: {},
+              sources: [],
+              confidence: 0,
+              researched: false
+            });
+          }
+        }
       });
 
       liveDisplay.updateHeader({ activeAgents: 0 });
@@ -188,11 +306,11 @@ export class DeepResearchOrchestrator {
       }
 
       // Plateau detection
-      if (Math.abs(state.readyScore - previousReadyScore) < 0.01) {
+      if (Math.abs(state.readyScore - previousReadyScore) < PLATEAU_IMPROVEMENT_THRESHOLD) {
         plateauCount++;
-        if (plateauCount >= 2) {
-          log.warn(`Plateau detected (< 1% improvement for 2 iterations)`);
-          liveDisplay.logEvent('  Plateau detected — no improvement in last 2 iterations, stopping early');
+        if (plateauCount >= PLATEAU_ITERATIONS_BEFORE_STOP) {
+          log.warn(`Plateau detected (< ${(PLATEAU_IMPROVEMENT_THRESHOLD * 100).toFixed(0)}% improvement for ${PLATEAU_ITERATIONS_BEFORE_STOP} iterations)`);
+          liveDisplay.logEvent(`  Plateau detected — no improvement in last ${PLATEAU_ITERATIONS_BEFORE_STOP} iterations, stopping early`);
           break;
         }
       } else {

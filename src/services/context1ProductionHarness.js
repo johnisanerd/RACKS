@@ -35,50 +35,62 @@ import { createLogger } from '../utils/logger.js';
 import { OllamaService } from './ollama.js';
 import { WayfarerService } from './wayfarer.js';
 const log = createLogger('context1');
+/**
+ * LRU corpus chunk cache — O(1) eviction via Map insertion-order trick.
+ *
+ * Map preserves insertion order. To implement LRU:
+ *   - on GET: delete then re-insert to move entry to tail (most-recently-used)
+ *   - on SET: insert at tail; if over capacity, evict the head (least-recently-used)
+ * No timestamp comparisons, no O(n) scans.
+ */
 class CorpusCache {
-    constructor() {
+    constructor(maxCached = 50) {
         this.cache = new Map();
-        this.maxCached = 50;
+        this.maxCached = maxCached;
     }
     set(docId, content, chunks) {
         const contentHash = this.hashContent(content);
+        // If already present, delete first so re-insertion moves it to tail
+        if (this.cache.has(docId)) {
+            this.cache.delete(docId);
+        }
         this.cache.set(docId, {
             docId,
             contentHash,
             chunks,
             lastAccessed: Date.now(),
         });
-        // Evict oldest if cache too large (LRU)
+        // Evict LRU (head of map) when over capacity
         if (this.cache.size > this.maxCached) {
-            let oldest = null;
-            for (const entry of this.cache.entries()) {
-                if (!oldest || entry[1].lastAccessed < oldest[1].lastAccessed) {
-                    oldest = entry;
-                }
-            }
-            if (oldest) {
-                this.cache.delete(oldest[0]);
-            }
+            const lruKey = this.cache.keys().next().value;
+            if (lruKey !== undefined)
+                this.cache.delete(lruKey);
         }
     }
     get(docId, contentHash) {
         const cached = this.cache.get(docId);
-        if (cached && cached.contentHash === contentHash) {
-            cached.lastAccessed = Date.now();
-            return cached.chunks;
-        }
-        return null;
+        if (!cached || cached.contentHash !== contentHash)
+            return null;
+        // Promote to MRU: delete + re-insert at tail
+        this.cache.delete(docId);
+        cached.lastAccessed = Date.now();
+        this.cache.set(docId, cached);
+        return cached.chunks;
     }
+    /** Number of cached entries */
+    get size() { return this.cache.size; }
     clear() {
         this.cache.clear();
     }
     hashContent(content) {
-        let hash = 0;
-        for (let i = 0; i < Math.min(content.length, 1000); i++) {
-            hash = ((hash << 5) - hash) + content.charCodeAt(i);
-            hash = hash & hash;
+        // FNV-1a 32-bit — fast, low collision rate, constant time via early exit
+        let hash = 2166136261;
+        const len = Math.min(content.length, 2000);
+        for (let i = 0; i < len; i++) {
+            hash ^= content.charCodeAt(i);
+            hash = (hash * 16777619) >>> 0;
         }
-        return Math.abs(hash).toString(16);
+        return hash.toString(16).padStart(8, '0');
     }
 }
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -365,11 +377,12 @@ export class Context1ProductionHarness {
         }
         catch (err) {
             log.warn('Hybrid search failed, falling back to BM25', { error: String(err) });
-            return this.execSearchCorpus(query, corpus, seenChunkIds, remainingBudget);
+            return this.execSearchCorpus(query, corpus, seenChunkIds, remainingBudget, signal);
         }
     }
     // ─── Tool executors ───────────────────────────────────────────────────────
-    async execSearchCorpus(query, corpus, seenChunkIds, remainingBudget) {
+    async execSearchCorpus(query, corpus, seenChunkIds, remainingBudget, _signal // reserved — WayfarerService.research does not yet accept a signal
+    ) {
         const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
         // Fetch new web content via Wayfarer if under doc limit
         if (corpus.size < MAX_CORPUS_DOCS) {

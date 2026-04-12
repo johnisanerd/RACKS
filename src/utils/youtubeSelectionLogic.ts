@@ -6,11 +6,16 @@
  * builds targeted search queries based on identified content gaps.
  */
 
-import type { SectionFindings } from '../types/research.js';
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Minimal shape we need from SectionFindings for YouTube decisions */
+export interface SectionFindingsForYT {
+  confidence: number;
+  facts: string[];
+  sources: string[];
+}
 
 export enum YouTubeGapType {
   CUSTOMER_VOICE = 'CUSTOMER_VOICE',
@@ -152,8 +157,8 @@ function preferenceScore(result: YouTubeSearchResult, sectionTopic: string): num
  *   - EXPERT_OPINION: identity/desire sections lacking credible expert voices
  */
 export function assessNeedForYouTube(
-  section: { id: string; title: string; objective: string },
-  findings: SectionFindings
+  section: { id: string; title: string; description?: string },
+  findings: SectionFindingsForYT
 ): YouTubeNeed {
   // Already well-covered — skip YouTube
   if (findings.confidence > 0.70 && findings.facts.length > 50) {
@@ -220,7 +225,7 @@ export function selectBestYouTubeVideo(
  *   PRODUCT_DEMO   + skincare section    -> "skincare product demo application"
  */
 export function buildYouTubeSearchQuery(
-  section: { title: string; objective: string },
+  section: { title: string; description?: string },
   gapType: YouTubeGapType
 ): string {
   const topic = section.title.toLowerCase().trim();

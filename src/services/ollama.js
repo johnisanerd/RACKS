@@ -19,7 +19,7 @@ export class OllamaService {
         this.retryDelayMs = 1000;
         // Use provided URL, fall back to environment variable, then default
         this.baseUrl = baseUrl || process.env.OLLAMA_URL || 'http://localhost:11434';
-        this.defaultModel = 'gemma4:e2b';
+        this.defaultModel = 'gemma2b';
     }
     /**
      * Generate text — serialized through global concurrency limiter with retry

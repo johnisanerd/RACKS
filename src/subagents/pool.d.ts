@@ -21,6 +21,7 @@ export interface SubagentResult {
 export declare class SubagentPool {
     private concurrency;
     private limiter;
+    private pageBatchLimiter;
     private taskId;
     constructor(maxConcurrency?: number);
     /**

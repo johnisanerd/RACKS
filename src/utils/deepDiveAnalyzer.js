@@ -230,7 +230,7 @@ Return as JSON:
   "bestPractices": ["...", "..."],
   "gaps": ["...", "..."]
 }`;
-        const response = await ollamaService.generateStream(prompt, 'gemma4:e2b', { temperature: 0.5, num_predict: 512 });
+        const response = await ollamaService.generateStream(prompt, 'gemma2b', { temperature: 0.5, num_predict: 512 });
         const insights = parseJson(response);
         if (insights) {
             analysis.insights.architecture = insights.architecture || '';

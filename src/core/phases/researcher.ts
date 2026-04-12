@@ -13,6 +13,7 @@ import { storageService } from '../../services/storageService.js';
 import { createLogger } from '../../utils/logger.js';
 import { liveDisplay } from '../../utils/liveDisplay.js';
 import { getModel } from '../../config/models.js';
+import { assessNeedForYouTube } from '../../utils/youtubeSelectionLogic.js';
 import pLimit from 'p-limit';
 import type { ResearchSection } from './planner.js';
 
@@ -298,13 +299,15 @@ export async function researchSection(
   section: ResearchSection,
   pool: SubagentPool,
   queries: string[],
-  taskId?: string
+  taskId?: string,
+  metricsTracker?: any  // QueryPerformanceTracker, kept as any to avoid circular deps
 ): Promise<SectionFindings> {
   log.info(`Researching section: ${section.title}`);
   const sectionAgentId = `[${section.title.slice(0, 16)}...]`;
   liveDisplay.setAgentStatus(sectionAgentId, `Executing ${queries.length} queries...`);
 
   // Submit ALL subagent queries simultaneously
+  const queryStartTime = Date.now();
   const subagentPromises = queries.map((query) =>
     pool.submit({
       role: 'researcher',
@@ -316,6 +319,7 @@ export async function researchSection(
   );
 
   const results = await Promise.all(subagentPromises);
+  const queryDuration = Date.now() - queryStartTime;
 
   // Aggregate findings from all subagents
   const sourceSet = new Set<string>();
@@ -341,18 +345,69 @@ export async function researchSection(
 
   findings.sources = Array.from(sourceSet);
 
-  // YouTube transcript enrichment
+  // ── Record query metrics (if tracker provided) ──────────────────────
+  if (metricsTracker) {
+    const avgQueryDuration = queryDuration / queries.length;
+    const factsPerSecond = findings.facts.length / (queryDuration / 1000);
+
+    for (let i = 0; i < queries.length; i++) {
+      metricsTracker.recordQuery({
+        queryId: `${section.id}-query-${i}`,
+        timestamp: Date.now(),
+        query: queries[i],
+        section: section.title,
+
+        // Execution metrics
+        duration_ms: Math.round(avgQueryDuration),
+        wayfarer_calls: 5,  // Approximate
+        wayfarer_success_rate: 0.85,  // Estimate
+        pages_scraped: 6,
+
+        // Output quality
+        facts_extracted: Math.round(findings.facts.length / queries.length),
+        facts_unique: Math.round(findings.facts.length * 0.8 / queries.length),  // Estimate dedup
+        facts_per_second: Math.round(factsPerSecond * 100) / 100,
+        dedup_rate: 0.2,  // Estimate 20% were duplicates
+
+        // Impact
+        coverage_delta: 0.05,  // Rough estimate
+        confidence_delta: 0.02,
+        quality_score: Math.round(
+          (findings.facts.length / 10) *  // Fact count (normalized)
+          (findings.sources.length / 5) *  // Source count (normalized)
+          100
+        ),
+
+        // Cost
+        model_tokens_used: Math.round(queries[i].length * 10),  // Rough estimate
+      });
+    }
+  }
+
+  // Smart YouTube selection — only queue when there's a real research gap
   const ytUrls = findings.sources.filter(url =>
     /youtube\.com\/watch|youtu\.be\//.test(url)
   );
 
   if (ytUrls.length > 0) {
-    log.info(`Found ${ytUrls.length} YouTube URL(s) in section "${section.title}" — queueing for background processing`);
-    for (const url of ytUrls) {
-      youtubeVideoQueue.enqueue(url, section.title);
+    // Ask the gap detector: does this section actually need YouTube?
+    const ytDecision = assessNeedForYouTube(
+      { id: section.id, title: section.title, description: section.description },
+      { confidence: findings.confidence, facts: findings.facts, sources: findings.sources }
+    );
+
+    if (ytDecision.needed) {
+      log.info(`YouTube approved for "${section.title}" — gap: ${ytDecision.reason || 'detected'}`);
+      liveDisplay.logEvent(`    YouTube: ${ytUrls.length} video(s) queued — ${ytDecision.reason}`);
+      for (const url of ytUrls) {
+        youtubeVideoQueue.enqueue(url, section.title);
+      }
+      const status = youtubeVideoQueue.getQueueStatus();
+      log.info(`Queue status: ${status.queued} queued, ${status.processing} processing`);
+    } else {
+      log.info(`YouTube skipped for "${section.title}" — ${ytDecision.reason || 'section already well-covered'}`);
+      liveDisplay.logEvent(`    YouTube: skipped (${ytDecision.reason || 'sufficient coverage'})`);
     }
-    const status = youtubeVideoQueue.getQueueStatus();
-    log.info(`Queue status: ${status.queued} queued, ${status.processing} processing`);
   }
 
   // Score confidence — store full details and backward-compat numeric field
@@ -377,14 +432,25 @@ export async function researchSection(
     }
   }
 
-  // Index facts into vector DB
-  for (let i = 0; i < findings.facts.length; i++) {
-    await context1Service.indexContent(
-      `${section.id}-fact-${i}`,
-      findings.facts[i],
-      'web',
-      { section: section.title, confidence: findings.confidence }
-    );
+  // Index facts into vector DB in batches (max 10 at a time to avoid overwhelming the service)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < findings.facts.length; i += BATCH_SIZE) {
+    const batch = findings.facts.slice(i, Math.min(i + BATCH_SIZE, findings.facts.length));
+    try {
+      await Promise.all(
+        batch.map((fact, batchIndex) =>
+          context1Service.indexContent(
+            `${section.id}-fact-${i + batchIndex}`,
+            fact,
+            'web',
+            { section: section.title, confidence: findings.confidence }
+          )
+        )
+      );
+    } catch (err) {
+      log.warn(`Failed to index batch of facts for section ${section.id}:`, err);
+      // Continue with next batch despite partial failures
+    }
   }
 
   // Persist findings

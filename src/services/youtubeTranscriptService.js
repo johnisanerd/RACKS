@@ -21,7 +21,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 const execFileAsync = promisify(execFile);
 const log = createLogger('youtubeTranscript');
-const TRANSCRIPT_MODEL = 'gemma4:e2b';
+const TRANSCRIPT_MODEL = 'gemma2b';
 const PYTHON = '/opt/homebrew/bin/python3.11';
 const YTDLP = '/opt/homebrew/bin/yt-dlp';
 // Rate limiter: space requests to avoid IP blocks (2-3 sec between requests is safe)
@@ -504,7 +504,7 @@ except Exception as e:
                 for (let i = 0; i < rawText.length; i += 3000)
                     chunks.push(rawText.slice(i, i + 3000));
                 try {
-                    const partials = await Promise.all(chunks.slice(0, 8).map(chunk => ollamaService.generateStream(`Summarize this transcript segment in 2-3 sentences, extracting key facts:\n\n${chunk}`, 'gemma4:e2b', { temperature: 0.2, num_ctx: 4096, num_predict: 200 })));
+                    const partials = await Promise.all(chunks.slice(0, 8).map(chunk => ollamaService.generateStream(`Summarize this transcript segment in 2-3 sentences, extracting key facts:\n\n${chunk}`, 'gemma2b', { temperature: 0.2, num_ctx: 4096, num_predict: 200 })));
                     textToSummarize = partials.join('\n\n');
                 }
                 catch (err) {

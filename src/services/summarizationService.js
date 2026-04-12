@@ -6,8 +6,8 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('summarizationService');
 export class SummarizationService {
     constructor() {
-        this.sourceModel = 'gemma4:e2b'; // Fast compression
-        this.synthesisModel = 'qwen3.5:9b'; // Higher quality for final synthesis
+        this.sourceModel = 'gemma2b'; // Fast compression
+        this.synthesisModel = 'qwen9b'; // Higher quality for final synthesis
     }
     /**
      * Stage 1: Summarize individual sources (1-3 sentences each)

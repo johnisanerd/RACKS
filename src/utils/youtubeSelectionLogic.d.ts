@@ -5,7 +5,12 @@
  * for a given section, selects the best videos from search results, and
  * builds targeted search queries based on identified content gaps.
  */
-import type { SectionFindings } from '../types/research.js';
+/** Minimal shape we need from SectionFindings for YouTube decisions */
+export interface SectionFindingsForYT {
+    confidence: number;
+    facts: string[];
+    sources: string[];
+}
 export declare enum YouTubeGapType {
     CUSTOMER_VOICE = "CUSTOMER_VOICE",
     EXPERT_OPINION = "EXPERT_OPINION",
@@ -35,8 +40,8 @@ export interface YouTubeSearchResult {
 export declare function assessNeedForYouTube(section: {
     id: string;
     title: string;
-    objective: string;
-}, findings: SectionFindings): YouTubeNeed;
+    description?: string;
+}, findings: SectionFindingsForYT): YouTubeNeed;
 /**
  * Given a list of search results from Wayfarer, pick 1-2 best YouTube URLs.
  *
@@ -57,6 +62,6 @@ export declare function selectBestYouTubeVideo(searchResults: YouTubeSearchResul
  */
 export declare function buildYouTubeSearchQuery(section: {
     title: string;
-    objective: string;
+    description?: string;
 }, gapType: YouTubeGapType): string;
 //# sourceMappingURL=youtubeSelectionLogic.d.ts.map

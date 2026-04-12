@@ -44,12 +44,13 @@ function showHelp(): void {
   console.log('  racks <command> [options]\n');
 
   console.log(chalk.yellow('COMMANDS:'));
-  console.log('  ask           Broad research on a topic');
-  console.log('  ask-file      Research from a markdown document');
-  console.log('  dive          Deep dive into a single source');
-  console.log('  query         Ask follow-up questions about research');
-  console.log('  resume        Resume a paused research session');
-  console.log('  list-tasks    Show all research tasks\n');
+  console.log('  ask            Broad research on a topic');
+  console.log('  ask-file       Research from a markdown document');
+  console.log('  dive           Deep dive into a single source');
+  console.log('  query          Ask follow-up questions about research');
+  console.log('  resume         Resume a paused research session');
+  console.log('  list-tasks     Show all research tasks');
+  console.log('  brand-research Deep brand research (1000+ sources)\n');
 
   console.log(chalk.yellow('EXAMPLES:'));
   console.log('  racks ask --question "trends in AI safety" --time "2h"');
@@ -57,7 +58,8 @@ function showHelp(): void {
   console.log('  racks dive --url "https://github.com/anthropics/anthropic-sdk-python"');
   console.log('  racks query task-abc123 "What are the top 3 trends?"');
   console.log('  racks resume --task-id "task-abc123" --time "30m"');
-  console.log('  racks list-tasks\n');
+  console.log('  racks list-tasks');
+  console.log('  racks brand-research --brand "Based" --niche "social-commerce" --depth maximum\n');
 
   console.log(chalk.gray('For help on a command: racks <command> --help\n'));
 }
@@ -119,6 +121,12 @@ async function main(): Promise<void> {
       case 'list-tasks': {
         const { commandListTasks } = await import('./commands/listTasks.js');
         await commandListTasks(args.slice(1));
+        break;
+      }
+
+      case 'brand-research': {
+        const { commandBrandResearch } = await import('./commands/brandResearch.js');
+        await commandBrandResearch(args.slice(1));
         break;
       }
 

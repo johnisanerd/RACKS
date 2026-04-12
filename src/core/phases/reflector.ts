@@ -168,9 +168,14 @@ Format as JSON:
 
   try {
     const result = parseJson<{ gaps?: string[]; suggestedQueries?: string[] }>(response);
-    return result.gaps || [];
+    if (!Array.isArray(result.gaps)) {
+      log.warn('Reflection output missing or invalid gaps array, returning empty gaps');
+      return [];
+    }
+    return result.gaps;
   } catch (err) {
-    log.warn('Failed to parse reflection output:', err);
+    log.warn(`Failed to parse reflection output: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`Raw response (first 500 chars): ${response.substring(0, 500)}`);
     return [];
   }
 }

@@ -5,9 +5,6 @@
  * for a given section, selects the best videos from search results, and
  * builds targeted search queries based on identified content gaps.
  */
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 export var YouTubeGapType;
 (function (YouTubeGapType) {
     YouTubeGapType["CUSTOMER_VOICE"] = "CUSTOMER_VOICE";

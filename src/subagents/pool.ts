@@ -7,6 +7,7 @@ import { createLogger } from '../utils/logger.js';
 import { liveDisplay } from '../utils/liveDisplay.js';
 import { wayfarerService } from '../services/wayfarer.js';
 import { ollamaService } from '../services/ollama.js';
+import { getModel } from '../config/models.js';
 import p from 'p-limit';
 
 const log = createLogger('subagentManager');
@@ -32,11 +33,14 @@ export interface SubagentResult {
 export class SubagentPool {
   private concurrency: number;
   private limiter: ReturnType<typeof p>;
+  private pageBatchLimiter: ReturnType<typeof p>;
   private taskId: number = 0;
 
   constructor(maxConcurrency: number = 7) {
     this.concurrency = maxConcurrency;
     this.limiter = p(maxConcurrency);
+    // Create a separate limiter for page processing (8 concurrent compressions per subagent)
+    this.pageBatchLimiter = p(8);
     log.info(`Subagent pool initialized with concurrency=${maxConcurrency}`);
   }
 
@@ -72,21 +76,29 @@ export class SubagentPool {
         const allSources: string[] = [];
         const allQuotes: string[] = [];
 
-        // Process pages in small parallel batches (3 at a time) to stay within Ollama limits
-        const pageBatchLimit = p(3);
+        // Process pages in parallel batches (8 at a time for max throughput with 2b models)
+        // Use shared pageBatchLimiter to prevent memory leaks from creating new limiters
 
         let successCount = 0;
         let failureCount = 0;
 
         await Promise.all(
           pages.slice(0, 8).map(page =>
-            pageBatchLimit(async () => {
+            this.pageBatchLimiter(async () => {
               if (!page.content || page.content.length < 100) {
                 failureCount++;
                 return;
               }
 
-              liveDisplay.setAgentStatus(agentId, `Extracting: ${new URL(page.url).hostname}`);
+              // Safely extract hostname from URL, fallback to domain if parsing fails
+              let hostname = 'unknown';
+              try {
+                hostname = new URL(page.url).hostname || 'unknown';
+              } catch (err) {
+                log.warn(`Failed to parse URL: ${page.url}`, err);
+                hostname = page.url.split('/')[2] || 'unknown';
+              }
+              liveDisplay.setAgentStatus(agentId, `Extracting: ${hostname}`);
 
               // Truncate to ~3000 chars for the model
               const truncated = page.content.slice(0, 3000);
@@ -111,23 +123,54 @@ Example: ["Fact 1 here.", "Fact 2 here.", "Fact 3 here."]`;
               try {
                 const response = await ollamaService.generateStream(
                   compressionPrompt,
-                  'gemma4:e2b', // Gemma 4 2B: fastest, best JSON compliance for extraction
+                  getModel('extraction'),
                   { temperature: 0.1, num_ctx: 4096, num_predict: 512 }
                 );
 
-                // Parse JSON array from response
+                // Multi-strategy JSON parsing for robustness
+                let facts: string[] = [];
+                let parsed = false;
+
+                // Strategy 1: Direct JSON array match
                 const jsonMatch = response.match(/\[[\s\S]*?\]/);
                 if (jsonMatch) {
-                  const facts = JSON.parse(jsonMatch[0].replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim()) as string[];
-                  allFacts.push(...facts.filter(f => typeof f === 'string' && f.length > 10));
+                  try {
+                    const cleaned = jsonMatch[0].replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+                    facts = JSON.parse(cleaned) as string[];
+                    parsed = true;
+                  } catch (e) {
+                    // Fallthrough to next strategy
+                  }
                 }
 
-                allSources.push(page.url);
-                successCount++;
+                // Strategy 2: Find all quoted strings if JSON array failed
+                if (!parsed && response.includes('"')) {
+                  const stringMatches = response.match(/"([^"]+)"/g);
+                  if (stringMatches && stringMatches.length > 0) {
+                    facts = stringMatches.map(s => s.slice(1, -1)).filter(s => s.length > 10);
+                    parsed = facts.length > 0;
+                  }
+                }
+
+                // Add extracted facts or fallback
+                if (parsed && facts.length > 0) {
+                  allFacts.push(...facts);
+                  allSources.push(page.url);
+                  successCount++;
+                } else {
+                  // Fallback: use title + snippet as basic fact
+                  if (page.title && page.title !== 'Untitled') {
+                    allFacts.push(`${page.title}: ${page.content.slice(0, 150)}`);
+                    allSources.push(page.url);
+                    successCount++;
+                  } else {
+                    failureCount++;
+                  }
+                }
               } catch (err) {
                 failureCount++;
                 log.warn(`Extraction failed for page ${page.title}: ${err instanceof Error ? err.message : 'unknown'}`);
-                // Fallback: use title + snippet as a basic fact
+                // Emergency fallback: use title + snippet
                 if (page.title && page.title !== 'Untitled') {
                   allFacts.push(`${page.title}: ${page.content.slice(0, 150)}`);
                   allSources.push(page.url);

@@ -40,5 +40,5 @@ export interface SectionFindings {
  * Research a single section using parallel subagents.
  * Combines findings, reasons about them, indexes results, and handles YouTube videos.
  */
-export declare function researchSection(section: ResearchSection, pool: SubagentPool, queries: string[], taskId?: string): Promise<SectionFindings>;
+export declare function researchSection(section: ResearchSection, pool: SubagentPool, queries: string[], taskId?: string, metricsTracker?: any): Promise<SectionFindings>;
 //# sourceMappingURL=researcher.d.ts.map

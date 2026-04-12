@@ -1,28 +1,26 @@
 /**
  * Model Registry — Single source of truth for all LLM model assignments
  *
- * Routing strategy:
- *   Gemma models  — Planning/thinking and browsing/fact extraction from pages.
- *                   Gemma's thinking architecture is better at structured reasoning.
- *   Qwen models   — Technical synthesis, report writing, precision tasks.
- *   Minimum size  — 2b (no smaller models).
+ * Routing strategy (REMOTE Ollama @ 100.74.135.83:11440):
+ *   Qwen 2b/4b    — Fast fact extraction, planning, YouTube analysis
+ *   Qwen 9b       — Reasoning, reflection, synthesis, analysis
  *
  * All components import models from here, preventing duplication.
  */
 export const MODEL_REGISTRY = {
-    // === GEMMA TIER (thinking + browsing) ===
-    planning: 'gemma4:e2b', // Fast: decompose questions, generate queries
-    extraction: 'gemma4:e2b', // Fast: extract facts from scraped pages
-    reasoning: 'gemma4:27b', // Deep: analyze findings, spot contradictions, generate insights
-    reflection: 'gemma4:27b', // Deep: gap analysis, what's missing, what to research next
-    youtube_analysis: 'gemma4:e2b', // Fast: extract insights from YouTube transcripts
-    // === QWEN TIER (technical + writing) ===
-    synthesis: 'qwen3.5:27b', // Best quality: executive summary, full report writing
-    section_synthesis: 'qwen3.5:9b', // Section-level summaries (balance speed/quality)
-    citation: 'qwen3.5:4b', // Match facts to sources, format citations
-    desire_analysis: 'qwen3.5:9b', // Customer desire/emotion analysis (needs nuance)
+    // === QWEN FAST TIER (2b - planning/extraction) ===
+    planning: 'qwen3.5:2b', // Decompose questions, generate queries
+    extraction: 'qwen3.5:4b', // Extract facts from scraped pages (JSON structured output)
+    youtube_analysis: 'qwen3.5:2b', // Fast: extract insights from YouTube transcripts
+    // === QWEN MID TIER (4b/9b - reasoning/reflection/synthesis) ===
+    reasoning: 'qwen3.5:4b', // Analyze findings, spot contradictions, generate insights
+    reflection: 'qwen3.5:4b', // Gap analysis, what's missing, what to research next
+    synthesis: 'qwen3.5:9b', // Executive summary, full report writing
+    section_synthesis: 'qwen3.5:9b', // Section-level summaries
+    citation: 'qwen3.5:2b', // Match facts to sources, format citations
+    desire_analysis: 'qwen3.5:9b', // Customer desire/emotion analysis
     // === RETRIEVAL ===
-    embedding: 'nomic-embed-text', // Keep: vector embeddings for RAG
+    embedding: 'nomic-embed-text:latest', // Keep: vector embeddings for RAG
     context1: 'chromadb-context-1:latest', // Context-1 for observe-reason-act RAG
 };
 /**

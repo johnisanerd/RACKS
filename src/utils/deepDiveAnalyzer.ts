@@ -284,7 +284,7 @@ Return as JSON:
 
     const response = await ollamaService.generateStream(
       prompt,
-      'gemma4:e2b',
+      'gemma2b',
       { temperature: 0.5, num_predict: 512 }
     );
 

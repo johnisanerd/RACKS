@@ -66,7 +66,7 @@ Be strict: simple = 1 variable, narrow scope. Complex = 3+ variables, deep exper
 
     const complexityResponse = await ollamaService.generateStream(
       complexityPrompt,
-      'gemma4:e2b',
+      'gemma2b',
       { temperature: 0.5, num_predict: 256 }
     );
 
@@ -121,7 +121,7 @@ Return as JSON:
 
     const questionsResponse = await ollamaService.generateStream(
       questionsPrompt,
-      'gemma4:e2b',
+      'gemma2b',
       { temperature: 0.6, num_predict: 512 }
     );
 

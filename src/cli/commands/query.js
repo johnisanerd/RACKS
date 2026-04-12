@@ -1,28 +1,36 @@
 /**
  * Command: racks query
  *
- * Ask follow-up questions about previous research using knowledge base + RAG.
- * Usage: racks query <session-id> "Your question here?"
+ * Ask follow-up questions about previous research using Context-1 production harness.
+ * Context-1 runs an observe-reason-act loop over the stored findings corpus,
+ * doing multi-hop hybrid search (BM25 + dense vectors) to surface relevant evidence.
+ *
+ * Usage: racks query <task-id> "Your question here?"
  */
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
 import chalk from 'chalk';
 import { createLogger } from '../../utils/logger.js';
 import { createTaskQueue } from '../../core/taskQueue.js';
+import { queryFindings, isContext1Available } from '../../services/context1ProductionHarness.js';
 import { ollamaService } from '../../services/ollama.js';
+import { getModel } from '../../config/models.js';
 const log = createLogger('command-query');
 const taskQueue = createTaskQueue();
-/**
- * Parse command-line arguments for query command
- */
 function parseArgs(args) {
     const options = {};
     const positional = [];
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
-        if (arg === '--session-id' && i + 1 < args.length) {
-            options.sessionId = args[++i];
+        if (arg === '--task-id' && i + 1 < args.length) {
+            options.taskId = args[++i];
         }
         else if (arg === '--question' && i + 1 < args.length) {
             options.question = args[++i];
+        }
+        else if (arg === '--verbose' || arg === '-v') {
+            options.verbose = true;
         }
         else if (arg === '--help' || arg === '-h') {
             options.help = true;
@@ -31,96 +39,186 @@ function parseArgs(args) {
             positional.push(arg);
         }
     }
-    // Support positional args: query <session-id> "<question>"
-    if (positional.length >= 1 && !options.sessionId) {
-        options.sessionId = positional[0];
-    }
-    if (positional.length >= 2 && !options.question) {
-        options.question = positional[1];
-    }
+    if (positional.length >= 1 && !options.taskId)
+        options.taskId = positional[0];
+    if (positional.length >= 2 && !options.question)
+        options.question = positional.slice(1).join(' ');
     return options;
 }
-/**
- * Show help for query command
- */
 function showHelp() {
-    console.log(chalk.bold.yellow('\nracks query — Ask follow-up questions about research\n'));
+    console.log(chalk.bold.cyan('\nracks query — Ask follow-up questions about research\n'));
+    console.log(chalk.gray('Uses Context-1 (chromadb-context-1) to do multi-hop search over your findings.\n'));
     console.log(chalk.gray('USAGE:'));
-    console.log('  racks query <session-id> "<question>"\n');
-    console.log('  racks query --session-id <id> --question "<question>"\n');
+    console.log('  racks query <task-id> "<question>"\n');
     console.log(chalk.gray('OPTIONS:'));
-    console.log('  --session-id <id>  Research session/task ID (required)');
+    console.log('  --task-id <id>     Research task ID (required)');
     console.log('  --question <q>     Question to ask (required)');
+    console.log('  --verbose, -v      Show Context-1 retrieval steps');
     console.log('  --help, -h         Show this help\n');
     console.log(chalk.gray('EXAMPLES:'));
-    console.log('  racks query task-abc123 "What are the top 3 trends?"');
-    console.log('  racks query --session-id task-abc123 --question "How does this compare to 2023?"\n');
+    console.log('  racks query task-abc123 "What are the top 3 customer objections?"');
+    console.log('  racks query task-abc123 "Which competitor has the strongest identity marketing?" --verbose\n');
 }
-/**
- * Execute query command
- */
 export async function commandQuery(args) {
     const options = parseArgs(args);
     if (options.help) {
         showHelp();
         return;
     }
-    if (!options.sessionId || !options.question) {
-        console.error(chalk.red('✗ Error: both session-id and question are required'));
+    if (!options.taskId || !options.question) {
+        console.error(chalk.red('✗ Error: both task-id and question are required'));
         showHelp();
         process.exit(1);
     }
     try {
-        console.log(chalk.blue(`\n🔍 Querying session ${options.sessionId}...\n`));
-        // Load task to get original question
-        const task = taskQueue.getTask(options.sessionId);
+        // Load task metadata
+        const task = taskQueue.getTask(options.taskId);
         if (!task) {
-            console.error(chalk.red(`✗ Session not found: ${options.sessionId}`));
+            console.error(chalk.red(`✗ Task not found: ${options.taskId}`));
+            console.error(chalk.gray('Run `racks list` to see all tasks.'));
             process.exit(1);
         }
-        console.log(chalk.gray(`Original question: "${task.question}"`));
-        console.log(chalk.gray(`Current coverage: ${task.coverage || 0}%, Confidence: ${Math.round(task.confidence || 0)}%\n`));
-        console.log(chalk.cyan(`💭 Analyzing your question: "${options.question}"\n`));
-        // Query using Ollama RAG approach
-        // In a full implementation, this would retrieve relevant findings from storage
-        // and use an LLM to synthesize an answer
-        const prompt = `
-Based on the following research findings, answer this question:
-
-Original Research Question: "${task.question}"
-Research Coverage: ${task.coverage || 0}%
-Research Confidence: ${Math.round(task.confidence || 0)}%
-
-Follow-up Question: "${options.question}"
-
-Provide a concise, evidence-based answer. If the answer cannot be determined from the available research, explain why.
-`;
-        console.log(chalk.gray('Generating response from research findings...\n'));
-        let fullResponse = '';
-        // Generate response using Ollama
+        console.log(chalk.bold.white(`\n  Research: "${task.question}"`));
+        console.log(chalk.gray(`  Coverage: ${task.coverage || 0}% | Task ID: ${task.id}\n`));
+        // Load findings from storage — read all .json files in findings/ subdirectory
+        console.log(chalk.gray('  Loading findings corpus...'));
+        let findings = {};
         try {
-            fullResponse = await ollamaService.generateStream(prompt, 'qwen3.5:4b', {
-                temperature: 0.3,
-                num_predict: 500
+            const findingsDir = path.join(os.homedir(), 'research-output', options.taskId, 'findings');
+            const files = await fs.readdir(findingsDir);
+            await Promise.all(files
+                .filter(f => f.endsWith('.json'))
+                .map(async (f) => {
+                try {
+                    const raw = await fs.readFile(path.join(findingsDir, f), 'utf-8');
+                    const sectionId = f.replace(/\.json$/, '');
+                    findings[sectionId] = JSON.parse(raw);
+                }
+                catch { /* skip corrupt files */ }
+            }));
+        }
+        catch (err) {
+            log.warn('Could not load findings from storage:', err);
+        }
+        const sectionCount = Object.keys(findings).length;
+        console.log(chalk.gray(`  Corpus: ${sectionCount} sections loaded\n`));
+        // Build a flat text corpus from findings for Context-1 to search
+        // Each "document" in the corpus = one section's facts
+        const corpus = [];
+        for (const [sectionId, sectionData] of Object.entries(findings)) {
+            const section = sectionData;
+            if (!section?.facts?.length)
+                continue;
+            // Facts as numbered list with sources inline
+            const factsText = section.facts
+                .slice(0, 100)
+                .map((f, i) => `${i + 1}. ${f}`)
+                .join('\n');
+            const sourcesText = (section.sources || [])
+                .slice(0, 20)
+                .map((s) => `[${s}]`)
+                .join(' ');
+            corpus.push({
+                url: section.sources?.[0] ?? `findings://${sectionId}`,
+                title: section.sectionTitle || sectionId,
+                content: `=== ${section.sectionTitle || sectionId} ===\n\nSources: ${sourcesText}\n\nFindings:\n${factsText}`,
             });
-            process.stdout.write(fullResponse);
         }
-        catch (error) {
-            log.error('Generation failed:', error);
-            fullResponse = 'Unable to generate response at this time.';
-            process.stdout.write(fullResponse);
+        if (corpus.length === 0) {
+            console.log(chalk.yellow('  ⚠ No findings found for this task. Was the research completed?'));
+            taskQueue.close();
+            return;
         }
-        console.log('\n');
-        // Confidence assessment
-        const confidenceScore = Math.min(1, (task.confidence || 0) / 100);
-        const confidencePercent = Math.round(confidenceScore * 100);
-        console.log(chalk.gray(`\n📊 Confidence: ${confidencePercent}%`));
-        if (confidenceScore < 0.6) {
-            console.log(chalk.yellow(`⚠️  Low confidence — consider running fresh research on "${options.question}"\n`));
+        // Check if Context-1 is available
+        const c1Available = await isContext1Available();
+        if (c1Available) {
+            // === PATH A: Context-1 production harness ===
+            console.log(chalk.cyan(`  🔍 Context-1 searching ${corpus.length} sections for: "${options.question}"\n`));
+            const result = await queryFindings(options.question, corpus, {
+                maxSteps: 8,
+                onEvent: options.verbose ? (event) => {
+                    if (event.type === 'tool_call') {
+                        console.log(chalk.dim(`    [C1] ${event.tool}(${event.args?.slice(0, 60)}...)`));
+                    }
+                    else if (event.type === 'observation') {
+                        console.log(chalk.dim(`    [C1] Found ${event.chunksFound || 0} chunks`));
+                    }
+                    else if (event.type === 'budget_warning') {
+                        console.log(chalk.yellow(`    [C1] ⚠ Token budget ${event.tokensUsed}/${event.tokenBudget}`));
+                    }
+                    else if (event.type === 'prune') {
+                        console.log(chalk.dim(`    [C1] Pruned ${event.chunksPruned || 0} irrelevant chunks`));
+                    }
+                } : undefined,
+            });
+            if (result.chunks.length === 0) {
+                console.log(chalk.yellow('  No relevant findings found for this question.'));
+                console.log(chalk.gray('  Try rephrasing or running deeper research.\n'));
+                taskQueue.close();
+                return;
+            }
+            // Build answer using retrieved chunks as grounded context
+            const retrievedContext = result.chunks
+                .slice(0, 10)
+                .map((c, i) => `[${i + 1}] ${c.content}`)
+                .join('\n\n');
+            const answerPrompt = `You are a research analyst. Using ONLY the retrieved evidence below, answer the question.
+
+Question: "${options.question}"
+
+Retrieved Evidence (from research on "${task.question}"):
+${retrievedContext}
+
+Rules:
+- Only use facts from the evidence above. Never hallucinate.
+- Reference specific sources when possible (use [source] notation).
+- If the evidence doesn't fully answer the question, say so clearly.
+- Keep the answer focused and actionable.`;
+            const SYNTHESIS_MODEL = getModel('section_synthesis');
+            console.log(chalk.bold.white(`  Answer:\n`));
+            const answer = await ollamaService.generateStream(answerPrompt, SYNTHESIS_MODEL, {
+                temperature: 0.3,
+                num_predict: 800,
+                num_ctx: 8192,
+            });
+            console.log(answer);
+            // Show sources
+            const sourcedChunks = result.chunks.filter(c => c.metadata?.url);
+            if (sourcedChunks.length > 0) {
+                console.log(chalk.gray('\n  Sources cited:'));
+                const uniqueSources = new Set(sourcedChunks.map(c => c.metadata?.url).filter(Boolean));
+                Array.from(uniqueSources).slice(0, 8).forEach((url, i) => {
+                    console.log(chalk.gray(`    [${i + 1}] ${url}`));
+                });
+            }
+            if (options.verbose) {
+                console.log(chalk.dim(`\n  Context-1 stats: ${result.steps} steps, ${result.tokensUsed} tokens used, ${result.durationMs}ms`));
+            }
         }
         else {
-            console.log(chalk.gray(`Generated based on ${task.coverage || 0}% coverage\n`));
+            // === PATH B: Fallback — simple LLM query without Context-1 ===
+            console.log(chalk.yellow('  ⚠ Context-1 not available — falling back to direct LLM query'));
+            console.log(chalk.gray('  (Run `ollama pull chromadb-context-1:latest` for better results)\n'));
+            // Build a context from all findings
+            const allFacts = corpus
+                .flatMap(c => c.content.split('\n').filter(l => /^\d+\./.test(l)))
+                .slice(0, 80)
+                .join('\n');
+            const fallbackPrompt = `You are a research analyst. Based on these research findings, answer the question.
+
+Research Question: "${task.question}"
+Follow-up: "${options.question}"
+
+Research Findings:
+${allFacts}
+
+Answer based only on the findings above. If uncertain, say so.`;
+            const answer = await ollamaService.generateStream(fallbackPrompt, getModel('section_synthesis'), { temperature: 0.3, num_predict: 600 });
+            console.log(chalk.bold.white('  Answer:\n'));
+            console.log(answer);
+            console.log(chalk.yellow('\n  ⚠ This answer used fallback mode — citations may be incomplete.\n'));
         }
+        console.log('');
         taskQueue.close();
     }
     catch (error) {

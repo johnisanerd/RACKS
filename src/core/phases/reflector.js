@@ -140,10 +140,15 @@ Format as JSON:
     const response = await ollamaService.generateStream(prompt, EXTRACTION_MODEL, { temperature: 0.5, num_predict: 512 });
     try {
         const result = parseJson(response);
-        return result.gaps || [];
+        if (!Array.isArray(result.gaps)) {
+            log.warn('Reflection output missing or invalid gaps array, returning empty gaps');
+            return [];
+        }
+        return result.gaps;
     }
     catch (err) {
-        log.warn('Failed to parse reflection output:', err);
+        log.warn(`Failed to parse reflection output: ${err instanceof Error ? err.message : String(err)}`);
+        log.debug(`Raw response (first 500 chars): ${response.substring(0, 500)}`);
         return [];
     }
 }

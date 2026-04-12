@@ -11,7 +11,7 @@
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('wayfarer');
 export class WayfarerService {
-    constructor(baseUrl = process.env.VITE_WAYFARER_URL || 'http://100.74.135.83:8891') {
+    constructor(baseUrl = process.env.WAYFARER_URL || process.env.VITE_WAYFARER_URL || 'http://localhost:8889') {
         this.baseUrl = baseUrl;
     }
     /**

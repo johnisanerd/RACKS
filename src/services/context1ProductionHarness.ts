@@ -47,12 +47,30 @@ interface CachedDocument {
   lastAccessed: number;
 }
 
+/**
+ * LRU corpus chunk cache — O(1) eviction via Map insertion-order trick.
+ *
+ * Map preserves insertion order. To implement LRU:
+ *   - on GET: delete then re-insert to move entry to tail (most-recently-used)
+ *   - on SET: insert at tail; if over capacity, evict the head (least-recently-used)
+ * No timestamp comparisons, no O(n) scans.
+ */
 class CorpusCache {
-  cache: Map<string, CachedDocument> = new Map();
-  maxCached: number = 50;
+  private cache: Map<string, CachedDocument> = new Map();
+  readonly maxCached: number;
+
+  constructor(maxCached = 50) {
+    this.maxCached = maxCached;
+  }
 
   set(docId: string, content: string, chunks: CorpusChunk[]): void {
     const contentHash = this.hashContent(content);
+
+    // If already present, delete first so re-insertion moves it to tail
+    if (this.cache.has(docId)) {
+      this.cache.delete(docId);
+    }
+
     this.cache.set(docId, {
       docId,
       contentHash,
@@ -60,40 +78,40 @@ class CorpusCache {
       lastAccessed: Date.now(),
     });
 
-    // Evict oldest if cache too large (LRU)
+    // Evict LRU (head of map) when over capacity
     if (this.cache.size > this.maxCached) {
-      let oldest: [string, CachedDocument] | null = null;
-      for (const entry of this.cache.entries()) {
-        if (!oldest || entry[1].lastAccessed < oldest[1].lastAccessed) {
-          oldest = entry;
-        }
-      }
-      if (oldest) {
-        this.cache.delete(oldest[0]);
-      }
+      const lruKey = this.cache.keys().next().value;
+      if (lruKey !== undefined) this.cache.delete(lruKey);
     }
   }
 
   get(docId: string, contentHash: string): CorpusChunk[] | null {
     const cached = this.cache.get(docId);
-    if (cached && cached.contentHash === contentHash) {
-      cached.lastAccessed = Date.now();
-      return cached.chunks;
-    }
-    return null;
+    if (!cached || cached.contentHash !== contentHash) return null;
+
+    // Promote to MRU: delete + re-insert at tail
+    this.cache.delete(docId);
+    cached.lastAccessed = Date.now();
+    this.cache.set(docId, cached);
+    return cached.chunks;
   }
+
+  /** Number of cached entries */
+  get size(): number { return this.cache.size; }
 
   clear(): void {
     this.cache.clear();
   }
 
   hashContent(content: string): string {
-    let hash = 0;
-    for (let i = 0; i < Math.min(content.length, 1000); i++) {
-      hash = ((hash << 5) - hash) + content.charCodeAt(i);
-      hash = hash & hash;
+    // FNV-1a 32-bit — fast, low collision rate, constant time via early exit
+    let hash = 2166136261;
+    const len = Math.min(content.length, 2000);
+    for (let i = 0; i < len; i++) {
+      hash ^= content.charCodeAt(i);
+      hash = (hash * 16777619) >>> 0;
     }
-    return Math.abs(hash).toString(16);
+    return hash.toString(16).padStart(8, '0');
   }
 }
 
@@ -509,7 +527,7 @@ export class Context1ProductionHarness {
       return results;
     } catch (err) {
       log.warn('Hybrid search failed, falling back to BM25', { error: String(err) });
-      return this.execSearchCorpus(query, corpus, seenChunkIds, remainingBudget);
+      return this.execSearchCorpus(query, corpus, seenChunkIds, remainingBudget, signal);
     }
   }
 
@@ -519,7 +537,8 @@ export class Context1ProductionHarness {
     query: string,
     corpus: Map<string, CorpusDoc>,
     seenChunkIds: Set<string>,
-    remainingBudget: number
+    remainingBudget: number,
+    _signal?: AbortSignal   // reserved — WayfarerService.research does not yet accept a signal
   ): Promise<CorpusChunk[]> {
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
 

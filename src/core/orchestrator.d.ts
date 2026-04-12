@@ -12,6 +12,7 @@
 import { generateSearchQueries } from './phases/planner.js';
 import { type ResearchState } from './phases/synthesizer.js';
 import type { ResearchTask } from './taskQueue.js';
+import type { IntakeAnswers } from '../cli/commands/intake.js';
 export interface ResearchConfig {
     maxIterations: number;
     sourcesPerSection: number;
@@ -20,6 +21,8 @@ export interface ResearchConfig {
     timeoutMs?: number;
 }
 export declare const STANDARD_RESEARCH_CONFIG: ResearchConfig;
+export declare const PLATEAU_IMPROVEMENT_THRESHOLD = 0.01;
+export declare const PLATEAU_ITERATIONS_BEFORE_STOP = 2;
 export type { ResearchSection, ResearchPlan } from './phases/planner.js';
 export type { SectionFindings } from './phases/researcher.js';
 export type { ResearchState } from './phases/synthesizer.js';
@@ -28,7 +31,8 @@ export declare class DeepResearchOrchestrator {
     private config;
     private agentPool;
     private startTime;
-    constructor(configOverrides?: Partial<ResearchConfig>);
+    private intake?;
+    constructor(configOverrides?: Partial<ResearchConfig>, intake?: IntakeAnswers);
     /**
      * Main orchestration loop: Plan → Research → Reflect → Loop → Synthesize
      */
