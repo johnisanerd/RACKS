@@ -2,7 +2,7 @@
  * Simplified Diagnostics Runner for RACKS
  * Works with actual SubagentTask/SubagentResult interfaces
  */
-import { createLogger } from '../utils/logger';
+import { createLogger } from '../utils/logger.js';
 const log = createLogger('diagnosticsRunner');
 export async function runRACKSDiagnostics(pool) {
     log.info('🤖 Starting RACKS Diagnostics with 7 agents');

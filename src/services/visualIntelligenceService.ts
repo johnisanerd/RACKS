@@ -192,7 +192,7 @@ function identifyPatterns(analyses: SiteVisualAnalysis[]): string[] {
   }
 
   // Typography patterns
-  const modernFonts = analyses.filter(a => a.typography.modernness > 70).length;
+  const modernFonts = analyses.filter(a => a.typography.readability > 70).length;
   if (modernFonts > analyses.length * 0.6) {
     patterns.push('Modern, minimalist typography trend');
   }

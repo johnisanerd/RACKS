@@ -4,7 +4,9 @@
  * Identifies and fixes top bugs from diagnostics
  */
 
+import { createLogger } from '../utils/logger.js';
 import { SubagentPool } from '../subagents/pool.js';
+const log = createLogger('fixBugsAuto');
 
 async function main() {
   console.log('\n');
@@ -79,7 +81,7 @@ Provide:
         maxSteps: 3,
       });
 
-      if (result.success) {
+      if (result?.success) {
         console.log(`   ✅ Fix identified\n`);
       } else {
         console.log(`   ⚠️  Could not identify fix\n`);

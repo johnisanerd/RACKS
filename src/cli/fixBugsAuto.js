@@ -3,7 +3,9 @@
  * Automatic Bug Fixer
  * Identifies and fixes top bugs from diagnostics
  */
-import { SubagentPool } from '../utils/subagentManager';
+import { createLogger } from '../utils/logger.js';
+import { SubagentPool } from '../subagents/pool.js';
+const log = createLogger('fixBugsAuto');
 async function main() {
     console.log('\n');
     console.log('╔════════════════════════════════════════╗');
@@ -71,7 +73,7 @@ Provide:
                 context: 'You are a bug fixer. Be precise with code changes.',
                 maxSteps: 3,
             });
-            if (result.success) {
+            if (result?.success) {
                 console.log(`   ✅ Fix identified\n`);
             }
             else {

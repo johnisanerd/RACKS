@@ -234,7 +234,7 @@ export const LEAD_GENERATION: ResearchTemplate = {
     {
       id: 'decision-makers',
       title: 'Decision Makers & Contacts',
-      scope: 'high',
+      scope: 'core',
       description: 'Who makes buying decisions',
       priority: 'high',
       researchQueries: [
