@@ -1,35 +1,6 @@
 /**
- * Subagent Manager — Horizontal scaling for parallel research
- * Manages a pool of worker threads for concurrent research tasks
+ * Subagent Manager - Re-export from pool.ts
+ * Provides unified access to SubagentPool and interfaces
  */
-export interface SubagentTask {
-    role: string;
-    task: string;
-    query: string;
-    context: string;
-    maxSteps: number;
-}
-export interface SubagentResult {
-    success: boolean;
-    taskId?: string;
-    facts?: string[];
-    quotes?: string[];
-    statistics?: Record<string, string>;
-    sources?: string[];
-    error?: string;
-}
-export declare class SubagentPool {
-    private concurrency;
-    private limiter;
-    private taskId;
-    constructor(maxConcurrency?: number);
-    /**
-     * Submit a task to the pool
-     */
-    submit(task: SubagentTask): Promise<SubagentResult>;
-    /**
-     * Close the pool
-     */
-    close(): void;
-}
+export { SubagentPool, SubagentTask, SubagentResult } from '../subagents/pool.js';
 //# sourceMappingURL=subagentManager.d.ts.map

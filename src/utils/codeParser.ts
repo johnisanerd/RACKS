@@ -225,7 +225,7 @@ export function extractImports(code: string, language: string = 'typescript'): I
     }
   } else {
     // TypeScript/JavaScript
-    // import { A, B } from 'module'
+    // import { A, B } from 'module.js'
     const namedPattern = /import\s+\{\s*([^}]+)\s*\}\s+from\s+['"](.*?)['"]/gm;
     let match;
 
@@ -247,7 +247,7 @@ export function extractImports(code: string, language: string = 'typescript'): I
       });
     }
 
-    // import * as NS from 'module'
+    // import * as NS from 'module.js'
     const starPattern = /import\s+\*\s+as\s+(\w+)\s+from\s+['"](.*?)['"]/gm;
     while ((match = starPattern.exec(code)) !== null) {
       const lineNum = code.substring(0, match.index).split('\n').length;
@@ -262,7 +262,7 @@ export function extractImports(code: string, language: string = 'typescript'): I
       });
     }
 
-    // import Default from 'module'
+    // import Default from 'module.js'
     const defaultPattern = /import\s+(\w+)\s+from\s+['"](.*?)['"]/gm;
     while ((match = defaultPattern.exec(code)) !== null) {
       const lineNum = code.substring(0, match.index).split('\n').length;

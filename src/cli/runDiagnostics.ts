@@ -4,8 +4,8 @@
  * Execute all 7 diagnostic agents and collect issues
  */
 
-import { SubagentPool } from '../utils/subagentManager';
-import { runRACKSDiagnostics } from '../agents/diagnosticsRunner';
+import { SubagentPool } from '../subagents/pool.js';
+import { runRACKSDiagnostics } from '../agents/diagnosticsRunner.js';
 
 async function main() {
   console.log('\n');

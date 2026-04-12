@@ -3,8 +3,8 @@
  * Works with actual SubagentTask/SubagentResult interfaces
  */
 
-import { SubagentPool } from '../utils/subagentManager';
-import { createLogger } from '../utils/logger';
+import { SubagentPool } from '../subagents/pool.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('diagnosticsRunner');
 

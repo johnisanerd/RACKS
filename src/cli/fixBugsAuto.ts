@@ -4,7 +4,7 @@
  * Identifies and fixes top bugs from diagnostics
  */
 
-import { SubagentPool } from '../utils/subagentManager';
+import { SubagentPool } from '../subagents/pool.js';
 
 async function main() {
   console.log('\n');
