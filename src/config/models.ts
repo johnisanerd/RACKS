@@ -9,21 +9,24 @@
  */
 
 export const MODEL_REGISTRY = {
-  // === QWEN FAST TIER (2b - planning/extraction) ===
-  planning: 'qwen3.5:2b',           // Decompose questions, generate queries
-  extraction: 'qwen3.5:4b',         // Extract facts from scraped pages (JSON structured output)
-  youtube_analysis: 'qwen3.5:2b',   // Fast: extract insights from YouTube transcripts
+  // === GEMMA4 TIER (planning/generation) ===
+  // Using ONLY Gemma4 models that are reliably loaded on the Ollama instance
+  // gemma4:e2b (5.1B) and gemma4:e4b (8B) are the stable, available models
+  planning: 'gemma4:e2b',           // Decompose questions, generate queries (5.1B params)
+  extraction: 'gemma4:e4b',         // Extract facts from scraped pages (8B params)
+  youtube_analysis: 'gemma4:e2b',   // Fast: extract insights from YouTube transcripts
 
-  // === QWEN MID TIER (4b/9b - reasoning/reflection/synthesis) ===
-  reasoning: 'qwen3.5:4b',          // Analyze findings, spot contradictions, generate insights
-  reflection: 'qwen3.5:4b',         // Gap analysis, what's missing, what to research next
-  synthesis: 'qwen3.5:9b',          // Executive summary, full report writing
-  section_synthesis: 'qwen3.5:9b',  // Section-level summaries
-  citation: 'qwen3.5:2b',           // Match facts to sources, format citations
-  desire_analysis: 'qwen3.5:9b',    // Customer desire/emotion analysis
+  // === REASONING/REFLECTION/SYNTHESIS ===
+  // Using gemma4:e4b for all reasoning tasks - most capable available model
+  reasoning: 'gemma4:e4b',          // Analyze findings, spot contradictions
+  reflection: 'gemma4:e4b',         // Gap analysis, what's missing, what to research next
+  synthesis: 'gemma4:e4b',          // Executive summary, full report writing
+  section_synthesis: 'gemma4:e4b',  // Section-level summaries
+  citation: 'gemma4:e2b',           // Match facts to sources, format citations
+  desire_analysis: 'gemma4:e4b',    // Customer desire/emotion analysis
 
   // === RETRIEVAL ===
-  embedding: 'nomic-embed-text:latest', // Keep: vector embeddings for RAG
+  embedding: 'nomic-embed-text:latest', // Vector embeddings for RAG
   context1: 'chromadb-context-1:latest', // Context-1 for observe-reason-act RAG
 } as const;
 

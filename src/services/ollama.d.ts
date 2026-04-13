@@ -14,11 +14,12 @@ export interface GenerateOptions {
     top_k?: number;
 }
 export declare class OllamaService {
-    private baseUrl;
+    private explicitBaseUrl;
     private defaultModel;
     private maxRetries;
     private retryDelayMs;
     constructor(baseUrl?: string);
+    get baseUrl(): string;
     /**
      * Generate text — serialized through global concurrency limiter with retry
      */

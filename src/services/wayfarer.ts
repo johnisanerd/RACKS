@@ -52,7 +52,7 @@ export interface PageWithImages {
 export class WayfarerService {
   private baseUrl: string;
 
-  constructor(baseUrl: string = process.env.WAYFARER_URL || process.env.VITE_WAYFARER_URL || 'http://localhost:8889') {
+  constructor(baseUrl: string = process.env.WAYFARER_URL || process.env.VITE_WAYFARER_URL || 'http://localhost:8891') {
     this.baseUrl = baseUrl;
   }
 

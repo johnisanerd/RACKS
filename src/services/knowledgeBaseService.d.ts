@@ -1,41 +1,4 @@
-/**
- * Knowledge Base Service
- * Persistent semantic knowledge accumulation across research sessions
- * Enables follow-up questions and knowledge reuse
- */
-export interface KnowledgeEntry {
-    id: string;
-    topic: string;
-    domain: string;
-    content: string;
-    embedding?: number[];
-    sources: string[];
-    confidence: number;
-    lastUpdated: number;
-    relatedTopics: string[];
-    tags: string[];
-    category: 'market' | 'competitor' | 'customer' | 'trend' | 'tactical';
-}
-export interface SessionMemory {
-    sessionId: string;
-    taskIds: string[];
-    domain: string;
-    question: string;
-    knowledge: KnowledgeEntry[];
-    insights: Insight[];
-    metadata: {
-        createdAt: number;
-        updatedAt: number;
-        duration: number;
-    };
-}
-export interface Insight {
-    text: string;
-    importance: 'critical' | 'high' | 'medium';
-    relatesTo: string[];
-    actionable: boolean;
-    timestamp: number;
-}
+export function getKnowledgeBase(): any;
 /**
  * Knowledge Base Manager
  * In a real implementation, would use:
@@ -43,72 +6,89 @@ export interface Insight {
  * - Vector embeddings for semantic search (Context-1 or similar)
  * - LRU cache for recent queries
  */
-export declare class KnowledgeBaseManager {
-    private entries;
-    private sessions;
-    private topicIndex;
+export class KnowledgeBaseManager {
+    entries: Map<any, any>;
+    sessions: Map<any, any>;
+    topicIndex: Map<any, any>;
     /**
      * Add a fact to knowledge base
      */
-    addKnowledge(entry: KnowledgeEntry): Promise<void>;
+    addKnowledge(entry: any): Promise<void>;
     /**
      * Query knowledge base by topic
      */
-    queryByTopic(topic: string, topK?: number): Promise<KnowledgeEntry[]>;
+    queryByTopic(topic: any, topK?: number): Promise<any>;
     /**
      * Semantic search (requires embeddings)
      * In real implementation, would use vector similarity search
      */
-    semanticSearch(query: string, embedding?: number[], topK?: number): Promise<KnowledgeEntry[]>;
+    semanticSearch(query: any, embedding: any, topK?: number): Promise<any[]>;
     /**
      * Get related knowledge to a topic
      */
-    getRelated(topic: string): Promise<KnowledgeEntry[]>;
+    getRelated(topic: any): Promise<any[]>;
     /**
      * Extract domain-level insights from entries
      */
-    generateInsights(entries: KnowledgeEntry[]): Promise<Insight[]>;
+    generateInsights(entries: any): Promise<{
+        text: string;
+        importance: string;
+        relatesTo: any[];
+        actionable: boolean;
+        timestamp: number;
+    }[]>;
     /**
      * Create or update session memory
      */
-    createSession(domain: string, question: string, taskIds?: string[]): SessionMemory;
+    createSession(domain: any, question: any, taskIds?: any[]): {
+        sessionId: string;
+        domain: any;
+        question: any;
+        taskIds: any[];
+        knowledge: any[];
+        insights: any[];
+        metadata: {
+            createdAt: number;
+            updatedAt: number;
+            duration: number;
+        };
+    };
     /**
      * Load session from history
      */
-    getSession(sessionId: string): SessionMemory | null;
+    getSession(sessionId: any): any;
     /**
      * List all sessions
      */
-    listSessions(): SessionMemory[];
+    listSessions(): any[];
     /**
      * Find sessions by domain
      */
-    findSessionsByDomain(domain: string): SessionMemory[];
+    findSessionsByDomain(domain: any): any[];
     /**
      * Add knowledge to session
      */
-    appendKnowledge(sessionId: string, entry: KnowledgeEntry): void;
+    appendKnowledge(sessionId: any, entry: any): void;
     /**
      * Query session's accumulated knowledge
      * Used for follow-up questions
      */
-    querySession(sessionId: string, query: string): KnowledgeEntry[];
+    querySession(sessionId: any, query: any): any;
     /**
      * Generate summary of session knowledge
      */
-    summarizeSession(sessionId: string): string;
+    summarizeSession(sessionId: any): string;
     /**
      * Export knowledge for external use
      */
-    exportKnowledge(domain?: string): KnowledgeEntry[];
+    exportKnowledge(domain: any): any[];
     /**
      * Import knowledge (for seeding from external sources)
      */
-    importKnowledge(entries: KnowledgeEntry[]): Promise<void>;
+    importKnowledge(entries: any): Promise<void>;
     /**
      * Cleanup old knowledge (older than maxAge milliseconds)
      */
     cleanup(maxAgeMs?: number): number;
 }
-export declare function getKnowledgeBase(): KnowledgeBaseManager;
 //# sourceMappingURL=knowledgeBaseService.d.ts.map

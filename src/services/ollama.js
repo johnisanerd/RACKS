@@ -17,9 +17,12 @@ export class OllamaService {
     constructor(baseUrl) {
         this.maxRetries = 3;
         this.retryDelayMs = 1000;
-        // Use provided URL, fall back to environment variable, then default
-        this.baseUrl = baseUrl || process.env.OLLAMA_URL || 'http://localhost:11434';
+        this.explicitBaseUrl = baseUrl;
         this.defaultModel = 'gemma2b';
+    }
+    // Lazy getter that reads environment every time
+    get baseUrl() {
+        return this.explicitBaseUrl || process.env.OLLAMA_URL || 'http://localhost:11434';
     }
     /**
      * Generate text — serialized through global concurrency limiter with retry
@@ -31,6 +34,9 @@ export class OllamaService {
         const maxAttempts = 3;
         try {
             log.info(`Calling ${model} for generation (attempt ${attempt})`);
+            log.debug(`  URL: ${this.baseUrl}/api/generate`);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
             const response = await fetch(`${this.baseUrl}/api/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -38,15 +44,18 @@ export class OllamaService {
                     model,
                     prompt,
                     stream: false,
-                    think: false,
                     options: {
                         temperature: options.temperature ?? 0.7,
                         num_ctx: options.num_ctx ?? 4096,
                         num_predict: options.num_predict ?? 2048
                     }
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeout);
             if (!response.ok) {
+                const errText = await response.text().catch(() => '(unable to read error body)');
+                log.error(`HTTP ${response.status}: ${errText.slice(0, 200)}`);
                 throw new Error(`Ollama error: ${response.status} ${response.statusText}`);
             }
             const data = await response.json();

@@ -12,7 +12,7 @@ export const SERVICES = {
     concurrency: 5, // Max concurrent requests
   },
   wayfarer: {
-    url: process.env.WAYFARER_URL || 'http://localhost:8889',
+    url: process.env.WAYFARER_URL || 'http://localhost:8891',
     timeout: 15_000, // 15 seconds
     maxResults: 10,
   },
