@@ -386,7 +386,7 @@ export class DeepResearchTaskQueue extends EventEmitter {
       status: row.status,
       scheduleType: row.scheduleType,
       scheduledTime: row.scheduledTime,
-      timeWindow: row.timeWindowStart ? { start: row.timeWindowStart, end: row.timeWindowEnd } : undefined,
+      timeWindow: row.timeWindowStart && row.timeWindowEnd ? { start: row.timeWindowStart, end: row.timeWindowEnd } : undefined,
       cronExpression: row.cronExpression,
       createdAt: row.createdAt,
       startedAt: row.startedAt,

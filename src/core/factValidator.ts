@@ -362,7 +362,8 @@ function generateSummary(
   const unverified = facts.filter(f => f.status === 'unverified').length;
 
   let summary = `\n## Fact Validation Summary\n`;
-  summary += `- Validated: ${validated} (${(validated / facts.length * 100).toFixed(0)}%)\n`;
+  const validatedPercent = facts.length > 0 ? (validated / facts.length * 100).toFixed(0) : '0';
+  summary += `- Validated: ${validated} (${validatedPercent}%)\n`;
   summary += `- Contradicted: ${contradicted}\n`;
   summary += `- Unverified: ${unverified}\n`;
 

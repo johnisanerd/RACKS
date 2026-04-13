@@ -186,8 +186,11 @@ export class LoadMonitor extends EventEmitter {
         timeoutHandle = setTimeout(attemptAcquire, backoffMs);
       };
 
-      // Add to waiting list
-      const task: WaitingTask = { modelKey, priority, resolve, reject, timeoutHandle: null as any };
+      // Schedule first attempt before adding to queue
+      timeoutHandle = setTimeout(attemptAcquire, 100);
+
+      // Add to waiting list with timeout handle
+      const task: WaitingTask = { modelKey, priority, resolve, reject, timeoutHandle };
       this.waitingTasks.push(task);
       this.modelStates[modelKey].queued++;
 
@@ -196,9 +199,6 @@ export class LoadMonitor extends EventEmitter {
         const priorityOrder = { high: 0, normal: 1, low: 2 };
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       });
-
-      timeoutHandle = setTimeout(attemptAcquire, 100);
-      task.timeoutHandle = timeoutHandle;
     });
   }
 

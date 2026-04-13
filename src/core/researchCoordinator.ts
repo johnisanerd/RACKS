@@ -203,7 +203,7 @@ async function executeVisualResearch(
       id: `${platform}-${i}`,
       content: fact,
       source: platform,
-      platform: platform as any,
+      platform,
       confidence: result.confidence,
       metadata: {
         query: query.query,
@@ -248,9 +248,11 @@ async function deduplicateFindings(
       if (deduped.has(dedupKey)) {
         const dedupFact = deduped.get(dedupKey)!;
         dedupFact.sourceCount++;
+        // Only WebFindings have urls, VisualFindings don't
+        const url = 'url' in finding ? (finding as any).url : undefined;
         dedupFact.sources.push({
           platform: finding.platform,
-          url: (finding as any).url || undefined
+          url
         });
         // Boost confidence with more sources
         dedupFact.confidence = Math.min(0.99, 0.5 + dedupFact.sourceCount * 0.1);
@@ -262,13 +264,15 @@ async function deduplicateFindings(
     // New fact
     if (!foundMatch) {
       const dedupKey = `dedup-${Date.now()}-${Math.random()}`;
+      // Only WebFindings have urls, VisualFindings don't
+      const url = 'url' in finding ? (finding as any).url : undefined;
       deduped.set(dedupKey, {
         id: dedupKey,
         fact: finding.content,
         sourceCount: 1,
         sources: [{
           platform: finding.platform,
-          url: (finding as any).url
+          url
         }],
         confidence: finding.confidence
       });
@@ -298,9 +302,10 @@ export function calculateQualityScore(fact: DedupFact): number {
   const sourceBoost = Math.min(0.5, fact.sourceCount * 0.15);
 
   // Verified source boost (Amazon verified purchases, Trustpilot verified reviews, etc.)
+  // Note: Current DedupFact.sources interface doesn't include verified field
+  // This is a limitation - sources would need extended metadata for verification status
   const verifiedSources = fact.sources.filter(s =>
-    s.platform === 'trustpilot' ||
-    (s.platform === 'amazon' && (s as any).verified)
+    s.platform === 'trustpilot'
   ).length;
   const verifiedBoost = Math.min(0.3, verifiedSources * 0.1);
 
