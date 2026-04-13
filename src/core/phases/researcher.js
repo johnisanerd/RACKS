@@ -5,7 +5,6 @@
  * Combines findings, reasons about them, and indexes results.
  */
 import { ollamaService } from '../../services/ollama.js';
-import { context1Service } from '../../services/context1Service.js';
 import { youtubeVideoQueue } from '../../services/youtubeTranscriptService.js';
 import { storageService } from '../../services/storageService.js';
 import { createLogger } from '../../utils/logger.js';
@@ -352,18 +351,8 @@ export async function researchSection(section, pool, queries, taskId, metricsTra
             log.warn(`Reasoning step failed for section ${section.id}:`, err);
         }
     }
-    // Index facts into vector DB in batches (max 10 at a time to avoid overwhelming the service)
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < findings.facts.length; i += BATCH_SIZE) {
-        const batch = findings.facts.slice(i, Math.min(i + BATCH_SIZE, findings.facts.length));
-        try {
-            await Promise.all(batch.map((fact, batchIndex) => context1Service.indexContent(`${section.id}-fact-${i + batchIndex}`, fact, 'web', { section: section.title, confidence: findings.confidence })));
-        }
-        catch (err) {
-            log.warn(`Failed to index batch of facts for section ${section.id}:`, err);
-            // Continue with next batch despite partial failures
-        }
-    }
+    // Note: Facts are indexed into knowledge base asynchronously by other components
+    // No explicit indexing needed here
     // Persist findings
     if (taskId) {
         try {

@@ -124,12 +124,6 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'brand-research': {
-        const { commandBrandResearch } = await import('./commands/brandResearch.js');
-        await commandBrandResearch(args.slice(1));
-        break;
-      }
-
       case '--help':
       case '-h':
       case 'help': {

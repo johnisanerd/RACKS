@@ -24,7 +24,7 @@ export interface ResearchPlan {
 export declare function planResearch(question: string, sourcesPerSection?: number): Promise<ResearchPlan>;
 /**
  * Generate targeted search queries for a specific section.
- * Includes validation to ensure queries are relevant.
+ * Routes to natural query generator for brand research, template-based for generic research.
  */
 export declare function generateSearchQueries(section: ResearchSection, existingFacts?: string[]): Promise<string[]>;
 //# sourceMappingURL=planner.d.ts.map

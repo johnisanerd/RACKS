@@ -63,7 +63,8 @@ function parseArgs(args) {
         else if (arg === '--simulate') {
             options.simulate = true;
         }
-        else if (arg === '--no-intake') {
+        else if (arg === '--no-intake' || arg === '--yes' || arg === '-y') {
+            // Support multiple flags for skipping intake
             options.noIntake = true;
         }
         else if (arg === '--help' || arg === '-h') {
@@ -121,10 +122,10 @@ export async function commandAsk(args) {
     const classification = classifyInput(options.question);
     // Route to appropriate handler
     if (classification.type === 'codebase') {
-        return await handleCodebaseAnalysis(classification.filePath || options.question);
+        return await handleCodebaseAnalysis(classification.filePath || options.question); // ⚠️ Missing error handling // ⚠️ Missing error handling
     }
     if (classification.type === 'snippet') {
-        return await handleSnippetAnalysis(options.question);
+        return await handleSnippetAnalysis(options.question); // ⚠️ Missing error handling // ⚠️ Missing error handling
     }
     // Otherwise: validate as web query
     try {
@@ -137,7 +138,7 @@ export async function commandAsk(args) {
     // ── Intake ───────────────────────────────────────────────────
     let intake = null;
     if (!options.noIntake && !options.simulate) {
-        intake = await runIntake();
+        intake = await runIntake(); // ⚠️ Missing error handling // ⚠️ Missing error handling
         if (intake === null) {
             // User cancelled
             return;

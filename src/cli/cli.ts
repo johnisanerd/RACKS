@@ -13,6 +13,10 @@
  * - Final structured documents (PDF, JSON, Markdown)
  */
 
+// Load environment variables from .env file FIRST
+import dotenv from 'dotenv';
+dotenv.config();
+
 import * as readline from 'readline';
 import * as path from 'path';
 import * as os from 'os';

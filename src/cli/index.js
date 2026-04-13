@@ -103,11 +103,6 @@ async function main() {
                 await commandListTasks(args.slice(1));
                 break;
             }
-            case 'brand-research': {
-                const { commandBrandResearch } = await import('./commands/brandResearch.js');
-                await commandBrandResearch(args.slice(1));
-                break;
-            }
             case '--help':
             case '-h':
             case 'help': {

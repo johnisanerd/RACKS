@@ -50,12 +50,12 @@ function parseJson<T>(raw: string): T {
     if (parsed !== null && parsed !== undefined) return parsed as T;
   } catch {}
 
-  // 2. Strip leading/trailing code fences and whitespace
+  // 2. Strip leading/trailing code fences (```json, ```, etc.) and whitespace
   const fenceStripped = raw
-    .replace(/^```(?:json)?\s*/im, '')
-    .replace(/```\s*$/m, '')
-    .replace(/^[\s\n]+/, '')
-    .replace(/[\s\n]+$/, '')
+    .replace(/^```(?:json)?\s*/im, '') // Remove opening ```json or ```
+    .replace(/```\s*$/m, '') // Remove closing ```
+    .replace(/^[\s\n]+/, '') // Remove leading whitespace
+    .replace(/[\s\n]+$/, '') // Remove trailing whitespace
     .trim();
 
   if (fenceStripped.length > 0) {
@@ -175,16 +175,166 @@ Make each section specific and research-friendly (not too broad).`;
 }
 
 /**
- * Generate targeted search queries for a specific section.
- * Includes validation to ensure queries are relevant.
+ * Multi-strategy query generation based on research angle.
+ * Different sections need different platforms and sentiment approaches.
+ * Recognizes that Reddit ≠ TikTok ≠ Trustpilot for research value.
  */
-export async function generateSearchQueries(
+async function generateNaturalQueries(
+  brandName: string,
   section: ResearchSection,
   existingFacts: string[] = []
 ): Promise<string[]> {
   const PLANNING_MODEL = getModel('planning');
 
-  // Build a brief summary of what we already know
+  // Determine query strategy based on section title
+  // Different sections need different platforms and approaches
+  let queryStrategy = '';
+
+  if (section.title.toLowerCase().includes('desire') || section.title.toLowerCase().includes('problem')) {
+    // For customer desires and problems: focus on emotional/sentiment content
+    queryStrategy = `
+STRATEGY: Emotional & sentiment-driven queries
+PRIMARY PLATFORMS: Reddit (detailed experiences), TikTok (emotional reactions), Trustpilot (negative reviews)
+SENTIMENT: Mix of negative ("problems", "issues", "complaints") and positive ("desires", "loves", "benefits")
+EXAMPLES:
+- "site:reddit.com ${brandName} complaints users avoid"
+- "${brandName} TikTok reactions emotional impact"
+- "what people hate about ${brandName} reddit"
+- "${brandName} Trustpilot negative reviews complaints"
+- "why people buy ${brandName} reddit motivation"`;
+  } else if (section.title.toLowerCase().includes('competitor') || section.title.toLowerCase().includes('positioning')) {
+    // For competitor analysis: focus on comparative queries
+    queryStrategy = `
+STRATEGY: Comparative & competitive analysis queries
+PRIMARY PLATFORMS: Reddit (detailed comparisons), YouTube (reviews), Google (general)
+APPROACH: Focus on "vs", comparisons, alternatives, positioning
+EXAMPLES:
+- "site:reddit.com ${brandName} vs competitors comparison reddit"
+- "${brandName} alternatives comparison reddit"
+- "${brandName} vs [specific competitor] which is better"
+- "youtube ${brandName} review vs competition"
+- "how does ${brandName} compare to alternatives"`;
+  } else if (section.title.toLowerCase().includes('identity') || section.title.toLowerCase().includes('marker')) {
+    // For identity/brand markers: focus on brand perception and culture
+    queryStrategy = `
+STRATEGY: Brand identity & culture queries
+PRIMARY PLATFORMS: TikTok (culture/trends), Instagram, YouTube (creator usage), Reddit (community)
+APPROACH: Focus on who uses it, brand perception, cultural fit
+EXAMPLES:
+- "${brandName} TikTok creators who use it culture"
+- "instagram ${brandName} aesthetic brand vibe"
+- "${brandName} community reddit who are the users"
+- "what type of person uses ${brandName} reddit"
+- "${brandName} brand personality values reddit"`;
+  } else if (section.title.toLowerCase().includes('amazon') || section.title.toLowerCase().includes('review')) {
+    // For reviews and sales data: focus on review platforms
+    queryStrategy = `
+STRATEGY: Review & purchase intent queries
+PRIMARY PLATFORMS: Amazon (sales + reviews), Trustpilot (detailed reviews), site:amazon.com
+APPROACH: Focus on reviews, ratings, purchase decisions, real experiences
+EXAMPLES:
+- "site:amazon.com ${brandName} customer reviews ratings"
+- "${brandName} reviews Trustpilot real customers"
+- "site:amazon.com ${brandName} best worst features"
+- "${brandName} worth buying reddit honest"
+- "site:amazon.com ${brandName} does it work real reviews"`;
+  } else {
+    // Generic/brand analysis: broad coverage
+    queryStrategy = `
+STRATEGY: Broad market awareness queries
+APPROACH: Mix of platforms and sentiment for comprehensive understanding
+EXAMPLES:
+- "what is ${brandName} reddit explanation"
+- "site:reddit.com ${brandName} discussion community"
+- "${brandName} news trends 2025"
+- "is ${brandName} worth it good or bad"
+- "${brandName} how it works explained"`;
+  }
+
+  const prompt = `Generate 7-9 realistic search queries for this research section.
+
+Brand: "${brandName}"
+Section: ${section.title}
+Goal: ${section.description}
+
+${queryStrategy}
+
+Generate queries that:
+1. Sound like REAL searches people type (not academic questions)
+2. Mix different platforms: Reddit, TikTok, Trustpilot, Amazon, YouTube, Google
+3. Include actual sentiment (negative, positive, neutral - appropriate to the section)
+4. Are 4-12 words each
+5. Avoid generic marketing language
+
+Return ONLY valid JSON array:
+["query 1", "query 2", "query 3", "query 4", "query 5", "query 6", "query 7"]`;
+
+  const response = await ollamaService.generateStream(
+    prompt,
+    PLANNING_MODEL,
+    { temperature: 0.8, num_predict: 512 }
+  );
+
+  let queries: string[] = [];
+  try {
+    queries = parseJson<string[]>(response);
+    if (Array.isArray(queries) && queries.length > 0) {
+      queries = queries.filter((q: any) => typeof q === 'string' && q.length > 4 && q.length < 150);
+    }
+  } catch {
+    // Fallback: extract quoted strings
+    const quoted = Array.from(response.matchAll(/"([^"]{4,150})"/g))
+      .map(m => m[1])
+      .filter(q => !q.includes('{') && !q.includes('['));
+    if (quoted.length >= 3) {
+      queries = quoted.slice(0, 10);
+    }
+  }
+
+  if (queries.length === 0) {
+    log.warn(`Failed to generate queries for section "${section.title}", using fallback`);
+    // Fallback: section-appropriate queries
+    queries = [
+      `site:reddit.com ${brandName} ${section.title.toLowerCase()}`,
+      `${brandName} reddit`,
+      `${brandName} Trustpilot reviews`,
+      `${brandName} TikTok`,
+      `"${brandName}" real experiences`,
+      `site:amazon.com ${brandName}`,
+      `is ${brandName} worth it`
+    ];
+  }
+
+  return queries;
+}
+
+/**
+ * Generate targeted search queries for a specific section.
+ * Routes to natural query generator for brand research, template-based for generic research.
+ */
+export async function generateSearchQueries(
+  section: ResearchSection,
+  existingFacts: string[] = []
+): Promise<string[]> {
+  // Extract brand/product name from section description if it's in parentheses or follows "researching"
+  let brandContext = '';
+  const researchingMatch = section.description.match(/researching\s+([^)]+)/i);
+  const productMatch = section.description.match(/\(([^)]+)\)/);
+  if (researchingMatch) {
+    brandContext = researchingMatch[1];
+  } else if (productMatch && !productMatch[1].includes('e.g.')) {
+    brandContext = productMatch[1];
+  }
+
+  // If we have a brand name, use natural query generation (more conversational, less rigid)
+  if (brandContext.length > 0) {
+    log.info(`Generating natural queries for brand: "${brandContext}"`);
+    const naturalQueries = await generateNaturalQueries(brandContext, section, existingFacts);
+    return naturalQueries;
+  }
+
+  // Otherwise, use original template-based approach for generic research
+  const PLANNING_MODEL = getModel('planning');
   const existingSummary = existingFacts.slice(0, 10).join('; ');
 
   const prompt = `Generate 7-10 specific search queries to research this section thoroughly.
@@ -223,7 +373,6 @@ Return as JSON array of strings only (no extra text):
       queries = queries.filter((q: any) => typeof q === 'string' && q.length > 5);
     }
   } catch {
-    // Fallback: extract quoted strings from prose output
     const quoted = Array.from(response.matchAll(/"([^"]{10,80})"/g))
       .map(m => m[1])
       .filter(q => !q.includes('{') && !q.includes('['));

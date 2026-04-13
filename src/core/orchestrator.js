@@ -9,7 +9,7 @@
  *
  * This file is the main coordinator — it delegates to phase modules.
  */
-import { context1Service } from '../services/context1Service.js';
+import { context1ServiceEnhanced } from '../services/context1ServiceEnhanced.js';
 import { storageService } from '../services/storageService.js';
 import { SubagentPool } from '../subagents/pool.js';
 import { createLogger } from '../utils/logger.js';
@@ -55,7 +55,25 @@ function isMarketingResearch(question, intake) {
         'sell', 'campaign', 'target market', 'demographic', 'consumer'
     ];
     const lq = question.toLowerCase();
-    return marketingKeywords.some(kw => lq.includes(kw));
+    // Check for explicit marketing keywords
+    if (marketingKeywords.some(kw => lq.includes(kw)))
+        return true;
+    // Detect brand/product names: capitalized words, short questions, or business-sounding names
+    // Examples: "Based Body Works", "Apple Inc", "Collagen Powder", "basedbodyworks"
+    const wordCount = question.split(/\s+/).filter(w => w.length > 0).length;
+    // Brand detection: starts with capital OR is a lowercase compound word, short, no question words
+    const startsWithCapital = /^[A-Z]/.test(question);
+    const isCompoundWord = /^[a-z]+[A-Z]/.test(question); // camelCase or CamelCase
+    const isAllLowercaseNoSpaces = /^[a-z]+$/.test(question); // lowercase single word like "basedbodyworks"
+    const isBrandName = wordCount <= 5 &&
+        (startsWithCapital || isCompoundWord || isAllLowercaseNoSpaces) &&
+        !question.includes('how') && !question.includes('what') && !question.includes('why') &&
+        !question.includes('?');
+    if (isBrandName) {
+        log.info(`Detected potential brand/product name: "${question}" — treating as marketing research`);
+        return true;
+    }
+    return false;
 }
 export class DeepResearchOrchestrator {
     constructor(configOverrides, intake) {
@@ -101,9 +119,23 @@ export class DeepResearchOrchestrator {
             log.info('Using marketing research plan (brand_analysis → desire → competitor → identity → amazon)');
             const { sections, researchStrategy } = generateMarketingPlan(task.question, this.intake?.brandUrl, this.intake?.targetAudience, undefined // all 5 sections
             );
+            // Enhance sections with brand name context for better search queries
+            const enhancedSections = sections.map(section => ({
+                ...section,
+                // Add brand/product name to description if not already present
+                description: section.description.includes(task.question)
+                    ? section.description
+                    : `${section.description} (researching ${task.question})`,
+                // Add brand/product name to key questions
+                keyQuestions: section.keyQuestions.map(q => q
+                    .replace('{product}', task.question)
+                    .replace('{brand}', task.question)
+                    .replace('this product', `${task.question}`)
+                    .replace('the brand', task.question))
+            }));
             plan = {
                 question: task.question,
-                sections,
+                sections: enhancedSections,
                 researchStrategy,
                 totalEstimatedSources: sections.length * this.config.sourcesPerSection,
             };
@@ -265,7 +297,7 @@ export class DeepResearchOrchestrator {
         liveDisplay.logEvent(`\n  Research complete — ready score: ${state.readyScore.toFixed(2)}, ${state.iteration} iteration(s)`);
         log.info(`Research complete. Ready score: ${state.readyScore.toFixed(2)}, Iterations: ${state.iteration}`);
         // Flush any pending embeddings so semantic search works in synthesis
-        await context1Service.flush();
+        await context1ServiceEnhanced.flush();
         // Generate final report
         try {
             const report = await synthesizeReport(state, task.id);
