@@ -1,41 +1,35 @@
 /**
- * Error Context — Enhanced error information and recovery tracking
- *
- * Provides detailed error context, stack traces, and recovery options.
+ * Determine recovery strategy based on error type
  */
+export function determineRecoveryStrategy(error: any): any;
 /**
- * Enhanced error with context information
+ * Classify error severity
  */
-export interface ErrorContext {
-    message: string;
-    code?: string;
-    context?: string;
-    timestamp: Date;
-    retryable: boolean;
-    attemptNumber?: number;
-    maxAttempts?: number;
-    lastError?: Error;
-    stackTrace?: string;
-    metadata?: Record<string, unknown>;
-}
+export function classifyErrorSeverity(error: any): any;
 /**
  * Error context tracker for recovery
  */
-export declare class ErrorContextTracker {
-    private errors;
-    private readonly maxErrors;
+export class ErrorContextTracker {
+    errors: any[];
+    maxErrors: number;
     /**
      * Track an error with context
      */
-    track(error: unknown, context?: string): ErrorContext;
+    track(error: any, context: any): {
+        message: string;
+        context: any;
+        timestamp: Date;
+        retryable: boolean;
+        stackTrace: string;
+    };
     /**
      * Get error pattern analysis
      */
     analyzePattern(): {
-        mostCommonError: string | null;
+        mostCommonError: any;
         retryablePercentage: number;
-        errorFrequency: Map<string, number>;
-        recentErrors: ErrorContext[];
+        errorFrequency: Map<any, any>;
+        recentErrors: any[];
     };
     /**
      * Clear error history
@@ -44,63 +38,45 @@ export declare class ErrorContextTracker {
     /**
      * Get all errors
      */
-    getAll(): ErrorContext[];
+    getAll(): any[];
 }
 /**
  * State recovery helper
  */
-export declare class StateRecovery {
-    private savePoints;
+export class StateRecovery {
+    savePoints: Map<any, any>;
     /**
      * Save a checkpoint
      */
-    save(key: string, state: unknown): void;
+    save(key: any, state: any): void;
     /**
      * Restore from checkpoint
      */
-    restore(key: string): unknown | null;
+    restore(key: any): any;
     /**
      * Has checkpoint
      */
-    has(key: string): boolean;
+    has(key: any): boolean;
     /**
      * Clear checkpoint
      */
-    clear(key?: string): void;
+    clear(key: any): void;
     /**
      * Get all checkpoints
      */
-    getCheckpoints(): Map<string, unknown>;
+    getCheckpoints(): Map<any, any>;
 }
 /**
  * Error recovery strategy
  */
-export declare enum RecoveryStrategy {
-    RETRY = "retry",
-    FALLBACK = "fallback",
-    SKIP = "skip",
-    ABORT = "abort"
-}
-/**
- * Determine recovery strategy based on error type
- */
-export declare function determineRecoveryStrategy(error: unknown): RecoveryStrategy;
+export const RecoveryStrategy: any;
 /**
  * Error severity classification
  */
-export declare enum ErrorSeverity {
-    LOW = "low",// Can be ignored
-    MEDIUM = "medium",// Should be handled
-    HIGH = "high",// Must be addressed
-    CRITICAL = "critical"
-}
-/**
- * Classify error severity
- */
-export declare function classifyErrorSeverity(error: unknown): ErrorSeverity;
+export const ErrorSeverity: any;
 /**
  * Global error tracker
  */
-export declare const errorContextTracker: ErrorContextTracker;
-export declare const stateRecovery: StateRecovery;
+export const errorContextTracker: ErrorContextTracker;
+export const stateRecovery: StateRecovery;
 //# sourceMappingURL=errorContext.d.ts.map
