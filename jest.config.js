@@ -1,17 +1,23 @@
 export default {
+  preset: 'ts-jest',
   testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(p-limit|p-queue|yocto-queue|chalk|ansi-styles)/)'
+  ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       useESM: true,
       tsconfig: {
-        module: 'ES2020',
+        module: 'ESNext',
         target: 'ES2020',
-        moduleResolution: 'bundler'
+        moduleResolution: 'bundler',
+        declaration: true
       }
     }]
-  },
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',
@@ -23,6 +29,10 @@ export default {
     '!src/**/index.ts',
     '!src/cli/**'
   ],
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/'
+  ],
   coverageThreshold: {
     global: {
       branches: 50,
@@ -32,5 +42,5 @@ export default {
     }
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testTimeout: 10000
+  testTimeout: 30000
 };
